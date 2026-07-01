@@ -1,4 +1,4 @@
-# AGOS Kernel v0.3.0
+# AGOS Kernel v1.0.0
 
 > **The only executable component in AGOS.**
 
@@ -28,43 +28,39 @@ agos-kernel/
 ├── container/
 ├── event-engine/
 ├── bootstrapper/
-├── contract-engine/    ← EXEC-000016
-├── diagnostics/        ← EXEC-000017
-├── sdks/              ← EXEC-000018, EXEC-000019
-│   ├── capability/
-│   └── provider/
+├── contract-engine/
+├── diagnostics/
+├── knowledge/              ← EXEC-000021
+├── models/                ← EXEC-000022
+├── decision-pipeline/     ← EXEC-000023
+├── execution-context/      ← EXEC-000024
+├── api/                   ← EXEC-000025
+├── sdks/
 ├── main.py
 ├── test_integration.py
-└── test_validation.py  ← EXEC-000020
+└── test_validation.py
 ```
 
 ---
 
-## Engines
+## Public APIs
 
-| Engine | Description |
-|--------|-------------|
-| MissionEngine | Universal Mission Execution |
-| SkillEngine | Universal Skill Execution |
-| EventEngine | Async Event Processing |
-| ContractEngine | Universal Contract Validation |
-| Discovery | Auto-discovery of plugins |
-
----
-
-## SDKs
-
-| SDK | Description |
+| API | Description |
 |-----|-------------|
-| Capability SDK | Base class for all capabilities |
-| Provider SDK | Base class for all providers |
+| IKernelAPI | Kernel operations |
+| ICapabilityAPI | Capability operations |
+| IProviderAPI | Provider operations |
+| IMissionAPI | Mission operations |
+| IExecutionAPI | Execution operations |
+| IKnowledgeAPI | Knowledge operations |
 
 ---
 
 ## Version
 
 ```
-v0.3.0 - EXEC-000016 to EXEC-000020
+v1.0.0 - EXEC-000021 to EXEC-000025
+API SPECIFICATION v1.0 - FROZEN
 ```
 
 ---
