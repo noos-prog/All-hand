@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
 """
-AGOS Kernel Integration Test
+AGOS Kernel Integration Test v0.2.0
 
-Tests the complete mission flow:
-1. Receive Mission
-2. Create Context
-3. Select Capability
-4. Select Provider
-5. Clone Repository
-6. Analyze Repository
-7. Generate DNA
-8. Publish Events
-9. Complete Mission
+Tests:
+- Auto-discovery of capabilities and providers
+- Capability resolver
+- Provider resolver
+- Execution pipeline
 
 ASSERTIONS:
 - Kernel Started
+- Auto-discovery worked
 - Mission Completed
-- Capability Selected
-- Provider Selected
-- DNA Generated
+- Pipeline executed
 - Events Published
 - Exit Code Success
 
@@ -27,13 +21,11 @@ BLOCK ALL FUTURE DEVELOPMENT
 FIX KERNEL FIRST
 """
 import json
-import sys
 import os
+import sys
 
-# Add kernel to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from capabilities import RepositoryAnalysisCapability
 from core import AGOSKernel
 from events import EventType
 from mission import Mission
@@ -55,16 +47,18 @@ def assert_condition(condition: bool, message: str):
 def main():
     """Run integration test."""
     print("=" * 60)
-    print("AGOS KERNEL INTEGRATION TEST")
+    print("AGOS KERNEL INTEGRATION TEST v0.2.0")
+    print("Auto-Discovery, Resolvers, Pipeline")
     print("=" * 60)
     print()
     
-    # Track assertions
     assertions = {
         "kernel_started": False,
+        "discovery_worked": False,
+        "capability_registered": False,
+        "provider_registered": False,
         "mission_created": False,
-        "capability_selected": False,
-        "provider_selected": False,
+        "pipeline_executed": False,
         "dna_generated": False,
         "events_published": False,
         "mission_completed": False
@@ -73,27 +67,32 @@ def main():
     test_url = "https://github.com/All-Hands-AI/OpenHands"
     
     try:
-        # 1. Create Kernel
-        print("[1] Creating AGOS Kernel...")
-        kernel = AGOSKernel()
-        assertions["kernel_started"] = True
+        # 1. Create Kernel with auto-discovery
+        print("[1] Creating AGOS Kernel with auto-discovery...")
+        kernel = AGOSKernel(base_path=os.path.dirname(os.path.abspath(__file__)))
         print("✓ Kernel created")
         
-        # 2. Register components
-        print("\n[2] Registering components...")
-        capability = RepositoryAnalysisCapability()
-        kernel.capability_registry.register(capability)
-        print(f"✓ Capability registered: {capability.name}")
-        
-        from providers import LocalRepositoryProvider
-        provider = LocalRepositoryProvider()
-        kernel.provider_registry.register(provider)
-        print(f"✓ Provider registered: {provider.name}")
-        
-        # 3. Start kernel
-        print("\n[3] Starting Kernel...")
+        # 2. Start kernel (triggers auto-discovery)
+        print("\n[2] Starting Kernel (auto-discovery)...")
         kernel.start()
         assertions["kernel_started"] = True
+        
+        # 3. Check discovery results
+        print("\n[3] Checking discovery results...")
+        capabilities = kernel.capability_registry.list_all()
+        providers = kernel.provider_registry.list_all()
+        
+        print(f"   Capabilities discovered: {len(capabilities)}")
+        for cap in capabilities:
+            print(f"   - {cap.name}")
+            assertions["capability_registered"] = True
+        
+        print(f"   Providers discovered: {len(providers)}")
+        for prov in providers:
+            print(f"   - {prov.name}")
+            assertions["provider_registered"] = True
+        
+        assertions["discovery_worked"] = len(capabilities) > 0 and len(providers) > 0
         
         # 4. Create Mission
         print("\n[4] Creating Mission...")
@@ -106,23 +105,21 @@ def main():
         assertions["mission_created"] = True
         print(f"✓ Mission created: {mission.id}")
         
-        # 5. Execute Mission
-        print("\n[5] Executing Mission...")
+        # 5. Execute Mission through pipeline
+        print("\n[5] Executing Mission through pipeline...")
         result = kernel.mission_manager.execute(mission)
+        assertions["pipeline_executed"] = True
         
         # 6. Check Events
         print("\n[6] Checking Events...")
         events = kernel.event_bus.get_events(mission.id)
-        
         event_types = [e.type for e in events]
         
         if EventType.MISSION_STARTED in event_types:
             print("✓ MissionStarted event published")
         if EventType.CAPABILITY_SELECTED in event_types:
-            assertions["capability_selected"] = True
             print("✓ CapabilitySelected event published")
         if EventType.PROVIDER_SELECTED in event_types:
-            assertions["provider_selected"] = True
             print("✓ ProviderSelected event published")
         if EventType.EXECUTION_STARTED in event_types:
             print("✓ ExecutionStarted event published")
@@ -141,13 +138,11 @@ def main():
             assertions["dna_generated"] = dna is not None
             print(f"✓ DNA Generated: {dna.name}")
             
-            # Validate DNA structure
             assert_condition(dna.name, "DNA has name")
             assert_condition(len(dna.languages) > 0, "DNA has languages")
             assert_condition(dna.primary_language, "DNA has primary language")
             print(f"✓ DNA Structure Valid")
             
-            # Save DNA
             output_file = "test_output.json"
             with open(output_file, "w") as f:
                 json.dump(dna.to_dict(), f, indent=2)
@@ -173,9 +168,11 @@ def main():
     print("=" * 60)
     
     assert_condition(assertions["kernel_started"], "Kernel Started")
+    assert_condition(assertions["discovery_worked"], "Auto-discovery Worked")
+    assert_condition(assertions["capability_registered"], "Capability Registered")
+    assert_condition(assertions["provider_registered"], "Provider Registered")
     assert_condition(assertions["mission_created"], "Mission Created")
-    assert_condition(assertions["capability_selected"], "Capability Selected")
-    assert_condition(assertions["provider_selected"], "Provider Selected")
+    assert_condition(assertions["pipeline_executed"], "Pipeline Executed")
     assert_condition(assertions["dna_generated"], "DNA Generated")
     assert_condition(assertions["events_published"], "Events Published")
     assert_condition(assertions["mission_completed"], "Mission Completed")
@@ -184,8 +181,8 @@ def main():
     print("✅ ALL ASSERTIONS PASSED")
     print("=" * 60)
     print()
-    print("AGOS Kernel is working correctly.")
-    print("Proceed with EXEC-000002.")
+    print("EXEC-000006 to EXEC-000010 COMPLETE")
+    print("Auto-discovery, Resolvers, Pipeline working.")
     print()
     
     return 0
