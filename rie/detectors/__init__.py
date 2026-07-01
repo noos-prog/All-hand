@@ -445,3 +445,30 @@ def create_default_registry() -> DetectorRegistry:
     registry.register(DirectoryDetector())
     registry.register(DependencyDetector())
     return registry
+
+
+# Advanced Detectors
+from rie.detectors.ai_detector import AIStackDetector, AIStackFeatureSet
+from rie.detectors.capability_detector import CapabilityDetector, CapabilityFeatureSet
+from rie.detectors.architecture_detector import ArchitectureDetector, ArchitectureFeatureSet
+
+__all__ = [
+    "DetectorContext",
+    "DetectorResult",
+    "IDetector",
+    "LanguageDetector",
+    "FrameworkDetector",
+    "ConfigurationDetector",
+    "LicenseDetector",
+    "ReadmeDetector",
+    "DirectoryDetector",
+    "DependencyDetector",
+    "DetectorRegistry",
+    "create_default_registry",
+    "AIStackDetector",
+    "AIStackFeatureSet",
+    "CapabilityDetector",
+    "CapabilityFeatureSet",
+    "ArchitectureDetector",
+    "ArchitectureFeatureSet",
+]
