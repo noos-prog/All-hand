@@ -1,4 +1,4 @@
-# AGOS Kernel v0.1.0
+# AGOS Kernel v0.2.0
 
 > **The only executable component in AGOS.**
 
@@ -11,121 +11,54 @@ agos-kernel/
 ├── core/                  # MissionManager, AGOSKernel
 ├── context/              # ExecutionContext, ContextBuilder
 ├── decision/             # DecisionEngine
-├── execution/            # ExecutionEngine
-├── mission/              # Mission types
+├── execution/           # ExecutionEngine
+├── mission/             # Mission types
 ├── registry/
 │   ├── capability/       # CapabilityRegistry
 │   └── provider/         # ProviderRegistry
 ├── contracts/            # RepositoryDNA, RepositorySnapshot
-├── events/               # EventBus, Event types
-├── interfaces/            # IProvider, ICapability, ISkill
-├── shared/               # Shared types
-├── capabilities/         # RepositoryAnalysis capability
-├── providers/            # LocalRepositoryProvider
-├── main.py              # Entry point
-└── test_integration.py   # Integration test
+├── events/              # EventBus, Event types
+├── interfaces/         # IProvider, ICapability, ISkill
+├── shared/             # Shared types
+├── capabilities/       # RepositoryAnalysis capability
+├── providers/           # LocalRepositoryProvider
+├── discovery/          # AutoDiscovery ←
+├── resolvers/          # CapabilityResolver, ProviderResolver ←
+├── pipeline/           # ExecutionPipeline ←
+├── mission-engine/     # MissionEngine ←
+├── skill-engine/       # SkillEngine ←
+├── container/          # DI Container ←
+├── event-engine/       # EventEngine ←
+├── bootstrapper/       # Bootstrapper ←
+├── main.py            # Entry point
+└── test_integration.py # Integration test
 ```
 
 ---
 
-## Mission Flow
+## Mission Lifecycle
 
 ```
-Mission
-    │
-    ▼
-MissionManager
-    │
-    ▼
-ContextBuilder
-    │
-    ▼
-DecisionEngine (selects Capability + Provider)
-    │
-    ▼
-ExecutionEngine
-    │
-    ▼
-RepositoryAnalysis Capability
-    │
-    ▼
-RepositoryDNA
-    │
-    ▼
-MissionCompleted
+Created → Validated → Planned → Executing → Completed/Failed/Cancelled
 ```
 
 ---
 
-## Registered Components
+## Engines
 
-### Capabilities
-| Name | Skills |
-|------|--------|
-| RepositoryAnalysis | CloneRepository, ReadRepository, GenerateDNA |
-
-### Providers
-| Name | Skills |
-|------|--------|
-| LocalRepositoryProvider | CloneRepository, ReadRepository |
-
-### Skills
-- CloneRepository
-- ReadRepository
-- GenerateDNA
-
----
-
-## Events Published
-
-- MissionCreated
-- MissionStarted
-- CapabilitySelected
-- ProviderSelected
-- ExecutionStarted
-- ExecutionCompleted
-- MissionCompleted
-
----
-
-## Constraints
-
-```
-❌ No UI
-❌ No Dashboard
-❌ No Marketplace
-❌ No Authentication
-❌ No Memory
-❌ No Multi-Agent
-❌ No AI Models
-❌ No Global State
-❌ No Singleton
-
-✅ Kernel Only
-✅ Capability Plugins
-✅ Provider Plugins
-✅ Event Bus
-✅ Typed Everything
-```
-
----
-
-## Usage
-
-```bash
-# Run integration test
-python test_integration.py
-
-# Run with GitHub URL
-python main.py https://github.com/All-Hands-AI/OpenHands
-```
+| Engine | Description |
+|--------|-------------|
+| MissionEngine | Universal Mission Execution |
+| SkillEngine | Universal Skill Execution |
+| EventEngine | Async Event Processing |
+| Discovery | Auto-discovery of plugins |
 
 ---
 
 ## Version
 
 ```
-v0.1.0 - ML0 Bootstrap
+v0.2.0 - EXEC-000011 to EXEC-000015
 ```
 
 ---
