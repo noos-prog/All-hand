@@ -1,0 +1,16 @@
+{
+  "components": 9,
+  "core_principle": {
+    "execution": "How?",
+    "brain": [
+      "What?",
+      "Why?",
+      "When?",
+      "Should we?"
+    ]
+  },
+  "inputs": 9,
+  "outputs": 8,
+  "rules": 3,
+  "levels": 5
+}
