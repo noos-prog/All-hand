@@ -257,3 +257,272 @@ class GovernanceRuntime:
         """Generate unique ID."""
         unique = f"{name}-{uuid.uuid4().hex[:8]}"
         return hashlib.md5(unique.encode()).hexdigest()[:16]
+
+
+# ============================================================
+# GOVERNANCE-000001: Decision Records
+# ============================================================
+
+class DecisionType(Enum):
+    ADR = "adr"
+    TDR = "tdr"
+    PDR = "pdr"
+    SDR = "sdr"
+    ODR = "odr"
+
+
+class DecisionStatus(Enum):
+    PROPOSED = "proposed"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    SUPERSEDED = "superseded"
+
+
+@dataclass
+class Decision:
+    id: str
+    decision_type: DecisionType
+    title: str
+    status: DecisionStatus
+    context: str
+    problem_statement: str
+    decision: str
+    alternatives: List[str] = field(default_factory=list)
+    trade_offs: List[str] = field(default_factory=list)
+    consequences: List[str] = field(default_factory=list)
+    risks: List[str] = field(default_factory=list)
+    evidence: List[str] = field(default_factory=list)
+    approved_by: str = ""
+    version: str = "1.0"
+    superseded_by: Optional[str] = None
+
+
+class DecisionRegistry:
+    def __init__(self):
+        self.decisions: Dict[str, Decision] = {}
+        self._init_core_decisions()
+    
+    def _init_core_decisions(self):
+        self.record(Decision(
+            id="ADR-000001", decision_type=DecisionType.ADR,
+            title="Kernel Architecture v2.0", status=DecisionStatus.APPROVED,
+            context="Establishing AGOS Kernel",
+            problem_statement="Need stable kernel without business logic",
+            decision="Implement kernel with Capabilities, Providers, Adapters",
+            alternatives=["Monolithic design"],
+            consequences=["Kernel is immutable", "Extensions are isolated"],
+            approved_by="Architecture Board"
+        ))
+        self.record(Decision(
+            id="ADR-000002", decision_type=DecisionType.ADR,
+            title="Async Execution Model", status=DecisionStatus.APPROVED,
+            context="Execution requirements",
+            problem_statement="Need concurrent execution",
+            decision="Use asyncio",
+            approved_by="Architecture Board"
+        ))
+        self.record(Decision(
+            id="TDR-000001", decision_type=DecisionType.TDR,
+            title="Python Implementation", status=DecisionStatus.APPROVED,
+            context="Implementation language",
+            problem_statement="Need broad ecosystem",
+            decision="Use Python 3.10+",
+            approved_by="Technical Board"
+        ))
+    
+    def record(self, decision: Decision):
+        self.decisions[decision.id] = decision
+    
+    def get(self, decision_id: str) -> Optional[Decision]:
+        return self.decisions.get(decision_id)
+    
+    def list_by_type(self, dtype: DecisionType) -> List[Decision]:
+        return [d for d in self.decisions.values() if d.decision_type == dtype]
+    
+    def approve(self, decision_id: str, approved_by: str) -> bool:
+        decision = self.decisions.get(decision_id)
+        if not decision:
+            return False
+        decision.status = DecisionStatus.APPROVED
+        decision.approved_by = approved_by
+        return True
+
+
+# ============================================================
+# GOVERNANCE-000002: Technical Debt
+# ============================================================
+
+class DebtType(Enum):
+    ARCHITECTURE = "architecture"
+    CODE = "code"
+    KNOWLEDGE = "knowledge"
+    DOCUMENTATION = "documentation"
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+    INFRASTRUCTURE = "infrastructure"
+    TESTING = "testing"
+
+
+class DebtStatus(Enum):
+    IDENTIFIED = "identified"
+    ACKNOWLEDGED = "acknowledged"
+    REMEDIATION = "rememdy"
+    RESOLVED = "resolved"
+
+
+@dataclass
+class TechnicalDebt:
+    id: str
+    title: str
+    debt_type: DebtType
+    description: str
+    owner: str
+    priority: int
+    status: DebtStatus
+    evidence: List[str] = field(default_factory=list)
+    cost_estimate_hours: float = 0.0
+    interest_per_release: float = 0.0
+    resolution_strategy: str = ""
+    target_release: str = ""
+
+
+class TechnicalDebtRegistry:
+    def __init__(self):
+        self.debts: Dict[str, TechnicalDebt] = {}
+        self._init_debt()
+    
+    def _init_debt(self):
+        self.record(TechnicalDebt(
+            id="DEBT-000001", title="Test Coverage Gap",
+            debt_type=DebtType.TESTING, description="Coverage below target",
+            owner="Engineering Team", priority=3, status=DebtStatus.ACKNOWLEDGED,
+            evidence=["Coverage report"], cost_estimate_hours=40.0,
+            interest_per_release=0.5, resolution_strategy="Incremental coverage",
+            target_release="v2.1"
+        ))
+    
+    def record(self, debt: TechnicalDebt):
+        self.debts[debt.id] = debt
+    
+    def get(self, debt_id: str) -> Optional[TechnicalDebt]:
+        return self.debts.get(debt_id)
+    
+    def list_by_priority(self) -> List[TechnicalDebt]:
+        return sorted(self.debts.values(), key=lambda d: d.priority)
+    
+    def total_cost(self) -> float:
+        return sum(d.cost_estimate_hours for d in self.debts.values())
+
+
+# ============================================================
+# GOVERNANCE-000003: Release Governance
+# ============================================================
+
+class ReleaseType(Enum):
+    DEVELOPMENT = "development"
+    ALPHA = "alpha"
+    BETA = "beta"
+    RC = "release_candidate"
+    PRODUCTION = "production"
+    HOTFIX = "hotfix"
+    LTS = "long_term_support"
+
+
+class ReleaseStatus(Enum):
+    PLANNED = "planned"
+    BUILDING = "building"
+    TESTING = "testing"
+    CERTIFIED = "certified"
+    PUBLISHED = "published"
+    SIGNED = "signed"
+
+
+@dataclass
+class ReleaseManifest:
+    version: str
+    release_type: ReleaseType
+    status: ReleaseStatus
+    change_log: List[str] = field(default_factory=list)
+    migration_guide: str = ""
+    security_report: Dict[str, Any] = field(default_factory=dict)
+    benchmark_results: Dict[str, float] = field(default_factory=dict)
+    certification_results: Dict[str, bool] = field(default_factory=dict)
+    evidence_package: List[str] = field(default_factory=list)
+    known_issues: List[str] = field(default_factory=list)
+    digital_signature: str = ""
+    published_at: Optional[datetime] = None
+
+
+class ReleaseGovernance:
+    def __init__(self):
+        self.releases: Dict[str, ReleaseManifest] = {}
+        self._init_release()
+    
+    def _init_release(self):
+        self.create_release("2.0.0", ReleaseType.PRODUCTION)
+    
+    def create_release(self, version: str, release_type: ReleaseType) -> ReleaseManifest:
+        manifest = ReleaseManifest(
+            version=version, release_type=release_type,
+            status=ReleaseStatus.PLANNED
+        )
+        self.releases[version] = manifest
+        return manifest
+    
+    def get_release(self, version: str) -> Optional[ReleaseManifest]:
+        return self.releases.get(version)
+    
+    def sign_release(self, version: str) -> bool:
+        release = self.releases.get(version)
+        if not release or release.status != ReleaseStatus.CERTIFIED:
+            return False
+        release.digital_signature = hashlib.sha256(version.encode()).hexdigest()
+        release.status = ReleaseStatus.SIGNED
+        return True
+
+
+# Global instances
+_decision_registry = DecisionRegistry()
+_debt_registry = TechnicalDebtRegistry()
+_release_governance = ReleaseGovernance()
+
+
+def get_decision_registry() -> DecisionRegistry:
+    return _decision_registry
+
+
+def get_debt_registry() -> TechnicalDebtRegistry:
+    return _debt_registry
+
+
+def get_release_governance() -> ReleaseGovernance:
+    return _release_governance
+
+
+def test_governance():
+    """Test governance."""
+    print("=" * 60)
+    print("AGOS Engineering Governance")
+    print("=" * 60)
+    
+    decisions = get_decision_registry()
+    print(f"\nDecisions: {len(decisions.decisions)}")
+    for d in list(decisions.decisions.values())[:3]:
+        print(f"  - {d.id}: {d.title}")
+    
+    debt = get_debt_registry()
+    print(f"\nTechnical Debt: {len(debt.debts)} items")
+    print(f"  Total Cost: {debt.total_cost()} hours")
+    
+    releases = get_release_governance()
+    print(f"\nReleases: {len(releases.releases)}")
+    for v, r in releases.releases.items():
+        print(f"  - v{v} ({r.release_type.value})")
+    
+    print("\n" + "=" * 60)
+    print("Governance Systems Ready!")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    test_governance()
