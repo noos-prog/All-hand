@@ -39,9 +39,9 @@ class SkillResult:
     """Result of skill execution."""
     skill_name: str
     status: SkillStatus
+    started_at: datetime
     output: Optional[Any] = None
     error: Optional[str] = None
-    started_at: datetime
     completed_at: Optional[datetime] = None
     duration_ms: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
