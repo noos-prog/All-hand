@@ -4,8 +4,7 @@ from typing import List, Optional
 
 from context import ExecutionContext
 from interfaces import ICapability, IProvider
-from registry.capability import CapabilityRegistry
-from registry.provider import ProviderRegistry
+from registry import CapabilityRegistry, ProviderRegistry
 from shared import Result, ResultStatus
 
 
@@ -31,7 +30,7 @@ class DecisionEngine:
         self.capability_registry = capability_registry
         self.provider_registry = provider_registry
     
-    def decide(self, context: ExecutionContext) -> Result[Decision]:
+    def decide(self, context: ExecutionContext) -> Result:
         """
         Make decisions for the mission.
         

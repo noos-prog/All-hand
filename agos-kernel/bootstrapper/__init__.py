@@ -10,8 +10,8 @@ from event_engine import EventEngine
 from mission_engine import MissionEngine
 from pipeline import ExecutionPipeline
 from resolvers import CapabilityResolver, ProviderResolver
-from registry.capability import CapabilityRegistry
-from registry.provider import ProviderRegistry
+from registry import CapabilityRegistry
+from registry import ProviderRegistry
 
 
 @dataclass

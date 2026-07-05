@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Optional
 from context import ExecutionContext
 from interfaces import ICapability, IProvider
 from mission import Mission
-from registry.capability import CapabilityRegistry
-from registry.provider import ProviderRegistry
+from registry import CapabilityRegistry
+from registry import ProviderRegistry
 
 
 class ResolutionStatus(Enum):
