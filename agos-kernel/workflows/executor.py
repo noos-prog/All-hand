@@ -39,9 +39,9 @@ class ExecutionResult:
     execution_id: str
     step_id: str
     status: str
+    started_at: datetime
     output: Optional[Any] = None
     error: Optional[str] = None
-    started_at: datetime
     completed_at: Optional[datetime] = None
     duration_ms: float = 0.0
     retry_count: int = 0
@@ -122,6 +122,8 @@ class Executor:
             step_id=step_id,
             status="running",
             started_at=datetime.utcnow(),
+            output=None,
+            error=None,
         )
         
         with self._lock:

@@ -33,8 +33,8 @@ from .pipeline import (
 )
 from .executor import (
     Executor,
-    ExecutorConfig,
     ExecutorStatus,
+    ExecutionConfig,
     ExecutionResult,
     get_executor,
 )
