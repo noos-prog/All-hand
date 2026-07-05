@@ -200,3 +200,15 @@ class WorkspaceRuntime:
         root = Path(workspace.context.filesystem_root)
         if root.exists() and root.parent == self.base_path:
             shutil.rmtree(root, ignore_errors=True)
+
+
+# Global workspace manager instance
+_workspace_manager: Optional[WorkspaceManager] = None
+
+
+def get_workspace_manager() -> WorkspaceManager:
+    """Get the global workspace manager instance."""
+    global _workspace_manager
+    if _workspace_manager is None:
+        _workspace_manager = WorkspaceManager()
+    return _workspace_manager

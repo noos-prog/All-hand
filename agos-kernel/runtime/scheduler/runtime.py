@@ -1,12 +1,37 @@
 """Universal Scheduler Runtime."""
 import hashlib
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .models import (
     Schedule, ScheduleType, ScheduleStatus, ExecutionCalendar
 )
+
+
+@dataclass
+class ScheduleConfig:
+    """Scheduler configuration."""
+    max_concurrent: int = 4
+    default_priority: int = 0
+    default_retry_enabled: bool = True
+    default_max_retries: int = 3
+    default_retry_delay: float = 60.0
+    timezone: str = "UTC"
+
+
+@dataclass
+class ScheduledTask:
+    """A scheduled task wrapper."""
+    id: str
+    name: str
+    handler: Callable
+    args: tuple = field(default_factory=tuple)
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+    schedule: Optional[Schedule] = None
+    last_result: Any = None
+    last_error: Optional[str] = None
 
 
 class SchedulerRuntime:
@@ -49,7 +74,6 @@ class SchedulerRuntime:
         schedule.created_at = datetime.now()
         schedule.updated_at = datetime.now()
         
-        # Add to calendar
         self.calendar.schedules.append(schedule)
         self.schedules[schedule_id] = schedule
         
@@ -75,19 +99,6 @@ class SchedulerRuntime:
         
         return schedules
     
-    def update_schedule(self, schedule_id: str, **kwargs) -> Optional[Schedule]:
-        """Update schedule attributes."""
-        schedule = self.schedules.get(schedule_id)
-        if not schedule:
-            return None
-        
-        for key, value in kwargs.items():
-            if hasattr(schedule, key):
-                setattr(schedule, key, value)
-        
-        schedule.updated_at = datetime.now()
-        return schedule
-    
     def cancel_schedule(self, schedule_id: str) -> bool:
         """Cancel a schedule."""
         schedule = self.schedules.get(schedule_id)
@@ -112,50 +123,8 @@ class SchedulerRuntime:
         schedule.run_count += 1
         schedule.updated_at = datetime.now()
         
-        # If recurring, schedule next run
         if schedule.is_recurring and schedule.interval_seconds:
             schedule.next_run_at = datetime.now() + timedelta(seconds=schedule.interval_seconds)
-        
-        return True
-    
-    def complete_schedule(self, schedule_id: str) -> bool:
-        """Mark a schedule as completed."""
-        schedule = self.schedules.get(schedule_id)
-        if not schedule:
-            return False
-        
-        schedule.status = ScheduleStatus.COMPLETED
-        schedule.completed_at = datetime.now()
-        schedule.updated_at = datetime.now()
-        
-        # Handle recurring schedules
-        if schedule.is_recurring:
-            if schedule.max_runs and schedule.run_count >= schedule.max_runs:
-                schedule.status = ScheduleStatus.COMPLETED
-            else:
-                schedule.status = ScheduleStatus.READY
-                if schedule.interval_seconds:
-                    schedule.next_run_at = datetime.now() + timedelta(seconds=schedule.interval_seconds)
-        
-        return True
-    
-    def fail_schedule(self, schedule_id: str, error: str = "") -> bool:
-        """Mark a schedule as failed."""
-        schedule = self.schedules.get(schedule_id)
-        if not schedule:
-            return False
-        
-        schedule.retry_count += 1
-        
-        if schedule.retry_enabled and schedule.retry_count < schedule.max_retries:
-            # Schedule retry
-            schedule.status = ScheduleStatus.PENDING
-            schedule.next_run_at = datetime.now() + timedelta(seconds=schedule.retry_delay_seconds)
-        else:
-            schedule.status = ScheduleStatus.FAILED
-        
-        schedule.metadata["last_error"] = error
-        schedule.updated_at = datetime.now()
         
         return True
     
@@ -168,24 +137,14 @@ class SchedulerRuntime:
             if schedule.status != ScheduleStatus.READY:
                 continue
             
-            # Check if it's time to execute
             if schedule.execute_at <= now:
-                # Check dependencies
                 if not self._check_dependencies(schedule):
                     schedule.status = ScheduleStatus.BLOCKED
                     continue
-                
                 ready.append(schedule)
         
-        # Sort by priority
         ready.sort(key=lambda s: s.priority, reverse=True)
-        
         return ready
-    
-    def get_calendar(self) -> ExecutionCalendar:
-        """Get the execution calendar."""
-        self.calendar.current_time = datetime.now()
-        return self.calendar
     
     def _check_dependencies(self, schedule: Schedule) -> bool:
         """Check if all dependencies are completed."""
@@ -199,3 +158,96 @@ class SchedulerRuntime:
         """Generate unique ID."""
         unique = f"{name}-{uuid.uuid4().hex[:8]}"
         return hashlib.md5(unique.encode()).hexdigest()[:16]
+
+
+class TaskScheduler:
+    """
+    High-level Task Scheduler.
+    
+    Wraps SchedulerRuntime with task-based API.
+    """
+    
+    def __init__(self, config: Optional[ScheduleConfig] = None):
+        """Initialize task scheduler."""
+        self.config = config or ScheduleConfig()
+        self._runtime = SchedulerRuntime()
+        self._tasks: Dict[str, ScheduledTask] = {}
+        self._running = False
+    
+    def schedule(
+        self,
+        name: str,
+        handler: Callable,
+        args: tuple = None,
+        kwargs: Dict[str, Any] = None,
+        schedule_type: ScheduleType = ScheduleType.SCHEDULED,
+        execute_at: Optional[datetime] = None,
+        is_recurring: bool = False,
+        interval_seconds: Optional[float] = None,
+    ) -> ScheduledTask:
+        """Schedule a task."""
+        schedule = self._runtime.create_schedule(
+            name=name,
+            schedule_type=schedule_type,
+            execute_at=execute_at,
+            is_recurring=is_recurring,
+            interval_seconds=interval_seconds,
+        )
+        
+        task = ScheduledTask(
+            id=schedule.id,
+            name=name,
+            handler=handler,
+            args=args or (),
+            kwargs=kwargs or {},
+            schedule=schedule,
+        )
+        
+        self._tasks[task.id] = task
+        return task
+    
+    def unschedule(self, task_id: str) -> bool:
+        """Unschedule a task."""
+        if task_id in self._tasks:
+            del self._tasks[task_id]
+            return self._runtime.cancel_schedule(task_id)
+        return False
+    
+    def get_task(self, task_id: str) -> Optional[ScheduledTask]:
+        """Get a task by ID."""
+        return self._tasks.get(task_id)
+    
+    def list_tasks(self) -> List[ScheduledTask]:
+        """List all tasks."""
+        return list(self._tasks.values())
+    
+    def execute_now(self, task_id: str) -> bool:
+        """Execute a task immediately."""
+        return self._runtime.execute_now(task_id)
+    
+    def start(self) -> None:
+        """Start the scheduler."""
+        self._running = True
+    
+    def stop(self) -> None:
+        """Stop the scheduler."""
+        self._running = False
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get scheduler statistics."""
+        return {
+            "total_tasks": len(self._tasks),
+            "running": self._running,
+        }
+
+
+# Global scheduler instance
+_scheduler: Optional[TaskScheduler] = None
+
+
+def get_scheduler() -> TaskScheduler:
+    """Get the global scheduler instance."""
+    global _scheduler
+    if _scheduler is None:
+        _scheduler = TaskScheduler()
+    return _scheduler
