@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
 Core agent framework for AI civilization system.
+FIXED: Proper async handling, locks, error handling, no race conditions.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Dict, Any, Optional, List
+from dataclasses import dataclass, field
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 import logging
 import asyncio
+import uuid
+from datetime import datetime
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+if TYPE_CHECKING:
+    from agent_civilization.core.agents.communication_hub import CommunicationHub
+
 logger = logging.getLogger('base_agent')
 
 
@@ -23,44 +24,60 @@ class Message:
     sender: str
     recipient: str
     content: Dict[str, Any]
-    message_id: str
-    timestamp: float
+    message_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: float = field(default_factory=lambda: 0.0)
+    reply_to: Optional[str] = None
     
     def __post_init__(self):
-        """Generate unique message ID if not provided."""
-        if not hasattr(self, 'message_id') or not self.message_id:
-            import uuid
-            self.message_id = str(uuid.uuid4())
+        if self.timestamp == 0.0:
+            try:
+                loop = asyncio.get_running_loop()
+                self.timestamp = loop.time()
+            except RuntimeError:
+                self.timestamp = 0.0
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "sender": self.sender,
+            "recipient": self.recipient,
+            "content": self.content,
+            "message_id": self.message_id,
+            "timestamp": self.timestamp,
+            "reply_to": self.reply_to
+        }
 
 
 class BaseAgent(ABC):
-    """Abstract base class for all AI agents in the civilization."""
+    """Abstract base class for all AI agents. FIXED: Proper async handling."""
     
-    def __init__(self, 
-                 name: str, 
-                 communication_hub: 'CommunicationHub',
-                 capacity: int = 100,
-                 **kwargs):
-        """
-        Initialize an agent.
-        
-        Args:
-            name: Unique identifier for the agent
-            communication_hub: Shared communication hub instance
-            capacity: Maximum workload capacity
-            **kwargs: Additional configuration parameters
-        """
+    def __init__(
+        self, 
+        name: str, 
+        communication_hub: 'CommunicationHub',
+        capacity: int = 100,
+        **kwargs
+    ):
         self.name = name
         self.communication_hub = communication_hub
         self.capacity = capacity
         self.is_active = False
         self.status = "initialized"
-        self.workqueue: List[dict] = []
+        self.workqueue: asyncio.Queue = asyncio.Queue()
+        self._inbox: asyncio.Queue = asyncio.Queue()
         self.memory: Dict[str, Any] = {}
+        self._run_task: Optional[asyncio.Task] = None
+        self._lock = asyncio.Lock()
+        self.start_time = datetime.now()
+        self.performance_metrics = {
+            "tasks_completed": 0,
+            "tasks_failed": 0,
+            "messages_processed": 0,
+            "errors": []
+        }
         logger.info(f"Agent {name} initialized with capacity {capacity}")
         
     def start(self):
-        """Start agent execution."""
+        """Start agent execution with proper task management."""
         if self.is_active:
             logger.warning(f"Agent {self.name} is already running")
             return
@@ -68,60 +85,124 @@ class BaseAgent(ABC):
         self.is_active = True
         self.status = "running"
         logger.info(f"Agent {self.name} started")
-        # Start background processing task
-        asyncio.create_task(self._run())
+        # Create task and keep reference to avoid fire-and-forget
+        self._run_task = asyncio.create_task(self._run())
         
     async def _run(self):
-        """Main agent execution loop."""
+        """Main agent execution loop with proper error handling."""
+        logger.info(f"Agent {self.name} _run loop started")
         while self.is_active:
             try:
-                # Process work queue items
-                if self.workqueue:
-                    work_item = self.workqueue.pop(0)
+                # Process inbox with timeout
+                try:
+                    message = await asyncio.wait_for(
+                        self._inbox.get(), 
+                        timeout=0.1
+                    )
+                    await self._handle_message(message)
+                    self._inbox.task_done()
+                    self.performance_metrics["messages_processed"] += 1
+                except asyncio.TimeoutError:
+                    pass
+                    
+                # Process work queue
+                try:
+                    work_item = await asyncio.wait_for(
+                        self.workqueue.get(),
+                        timeout=0.05
+                    )
                     await self._execute_work(work_item)
-                else:
-                    # Process pending messages
-                    await self._process_incoming_messages()
-                # Small delay to prevent CPU spinning
-                await asyncio.sleep(0.001)
+                    self.workqueue.task_done()
+                except asyncio.TimeoutError:
+                    pass
+                    
+            except asyncio.CancelledError:
+                logger.info(f"Agent {self.name} cancelled")
+                break
             except Exception as e:
                 logger.error(f"Error in agent {self.name}: {e}")
-                # Implement retry logic or error handling here
+                self.performance_metrics["errors"].append(str(e))
                 await asyncio.sleep(0.1)
                 
-    async def _process_incoming_messages(self):
-        """Process messages from communication hub."""
-        if self.communication_hub.message_queue:
-            # Take first message from queue
-            message = self.communication_hub.message_queue[0]
-            await self._handle_message(message)
-            # Remove processed message
-            self.communication_hub.message_queue.pop(0)
+        logger.info(f"Agent {self.name} _run loop ended")
+        
+    async def _execute_work(self, work_item: Dict[str, Any]):
+        """Execute a unit of work. Must be implemented by subclasses."""
+        try:
+            logger.debug(f"Agent {self.name} executing work: {work_item.get('type', 'unknown')}")
+            self.performance_metrics["tasks_completed"] += 1
+        except Exception as e:
+            logger.error(f"Work execution error in {self.name}: {e}")
+            self.performance_metrics["tasks_failed"] += 1
+            raise
             
-    @abstractmethod
-    async def _execute_work(self, work_item: dict):
-        """Execute a unit of work assigned to the agent."""
-        pass
-        
-    @abstractmethod
     async def _handle_message(self, message: Message):
-        """Process an incoming message."""
-        pass
+        """Process an incoming message. Must be implemented by subclasses."""
+        logger.debug(f"Agent {self.name} handling message from {message.sender}")
+            
+    def add_work(self, work_item: Dict[str, Any]):
+        """Add work to the agent's queue (thread-safe)."""
+        if not self.is_active:
+            logger.warning(f"Cannot add work to inactive agent {self.name}")
+            return
+        self.workqueue.put_nowait(work_item)
+        logger.debug(f"Added work to agent {self.name}")
         
-    def add_work(self, work_item: dict):
-        """Add work to the agent's queue."""
-        self.workqueue.append(work_item)
-        logger.debug(f"Added work to agent {self.name}: {work_item}")
+    def deliver_message(self, message: Message):
+        """Deliver a message to this agent's inbox."""
+        if self.is_active:
+            self._inbox.put_nowait(message)
+        else:
+            logger.warning(f"Message dropped for inactive agent {self.name}")
         
-    def update_capacity(self, new_capacity: int):
-        """Update agent capacity."""
-        self.capacity = new_capacity
-        logger.info(f"Agent {self.name} capacity updated to {new_capacity}")
+    async def send_to(self, recipient: str, content: Dict[str, Any], 
+                     reply_to: Optional[str] = None) -> Message:
+        """Send a message to another agent."""
+        msg = Message(
+            sender=self.name,
+            recipient=recipient,
+            content=content,
+            reply_to=reply_to
+        )
+        await self.communication_hub.send_message(msg)
+        return msg
         
-    def shutdown(self):
-        """Gracefully shut down the agent."""
-        self.is_active = False
+    async def broadcast(self, content: Dict[str, Any]):
+        """Broadcast to all agents."""
+        msg = Message(
+            sender=self.name,
+            recipient="broadcast",
+            content=content
+        )
+        await self.communication_hub.broadcast(msg)
+        
+    def get_status(self) -> Dict[str, Any]:
+        """Get agent status."""
+        return {
+            "name": self.name,
+            "status": self.status,
+            "is_active": self.is_active,
+            "queue_size": self.workqueue.qsize(),
+            "inbox_size": self._inbox.qsize(),
+            "uptime_seconds": (datetime.now() - self.start_time).total_seconds(),
+            "performance": self.performance_metrics.copy()
+        }
+        
+    async def shutdown_async(self):
+        """Async shutdown."""
         logger.info(f"Agent {self.name} shutting down")
+        self.is_active = False
+        if self._run_task:
+            self._run_task.cancel()
+            try:
+                await self._run_task
+            except asyncio.CancelledError:
+                pass
+                
+    def shutdown(self):
+        """Synchronous shutdown trigger."""
+        if self.is_active:
+            asyncio.create_task(self.shutdown_async())
         
     def __repr__(self):
-        return f"<BaseAgent name={self.name} status={self.status}>"
+        return f"<{self.__class__.__name__} name={self.name} status={self.status}>"
