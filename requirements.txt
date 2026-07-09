@@ -1,1 +1,3 @@
 PyYAML
+PyYAML
+aiohttp
