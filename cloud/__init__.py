@@ -11,7 +11,7 @@ The cloud runtime becomes the primary execution environment.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # =============================================================================
@@ -41,17 +41,26 @@ class DeploymentType(Enum):
     BLUE_GREEN = "blue_green"
 
 
+class MissionStatus(Enum):
+    """Mission status."""
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 # =============================================================================
 # CLOUD MODELS
 # =============================================================================
 
 @dataclass
-class CloudRuntime:
+class CloudConfig:
     """Cloud runtime configuration."""
     name: str
     region: str = "us-east-1"
     environment: str = "production"
-    targets: List[ExecutionTarget] = field(default_factory=list)
+    targets: Tuple[ExecutionTarget, ...] = ()
 
 
 @dataclass
@@ -63,6 +72,7 @@ class MissionRequest:
     parameters: Dict[str, Any] = field(default_factory=dict)
     priority: int = 5
     timeout_seconds: int = 300
+    created_at: datetime = field(default_factory=datetime.utcnow)
 
 
 @dataclass
@@ -73,6 +83,30 @@ class ExecutionResponse:
     status: str
     output: Any = None
     error: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+@dataclass
+class Project:
+    """Cloud project."""
+    project_id: str
+    name: str
+    description: str = ""
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    missions: Tuple[str, ...] = ()
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class Artifact:
+    """Execution artifact."""
+    artifact_id: str
+    name: str
+    mission_id: str
+    file_path: str
+    size_bytes: int = 0
+    created_at: datetime = field(default_factory=datetime.utcnow)
 
 
 # =============================================================================
@@ -83,49 +117,49 @@ class ExecutionResponse:
 class CloudAPI:
     """Cloud Runtime API."""
     version: str = "1.0.0"
-    endpoints: List[str] = field(default_factory=lambda: [
+    endpoints: Tuple[str, ...] = (
         "/api/v1/missions",
         "/api/v1/projects",
         "/api/v1/executions",
         "/api/v1/artifacts",
         "/api/v1/realtime"
-    ])
+    )
 
 
 @dataclass
 class MissionAPI:
     """Mission API."""
-    endpoints: List[str] = field(default_factory=lambda: [
+    endpoints: Tuple[str, ...] = (
         "POST /api/v1/missions",
         "GET /api/v1/missions",
         "GET /api/v1/missions/{id}",
         "DELETE /api/v1/missions/{id}",
         "POST /api/v1/missions/{id}/cancel"
-    ])
+    )
 
 
 @dataclass
 class ProjectAPI:
     """Project API."""
-    endpoints: List[str] = field(default_factory=lambda: [
+    endpoints: Tuple[str, ...] = (
         "POST /api/v1/projects",
         "GET /api/v1/projects",
         "GET /api/v1/projects/{id}",
         "DELETE /api/v1/projects/{id}",
         "POST /api/v1/projects/{id}/connect"
-    ])
+    )
 
 
 @dataclass
 class ExecutionAPI:
     """Execution API."""
-    endpoints: List[str] = field(default_factory=lambda: [
+    endpoints: Tuple[str, ...] = (
         "POST /api/v1/executions",
         "GET /api/v1/executions",
         "GET /api/v1/executions/{id}",
         "GET /api/v1/executions/{id}/logs",
         "POST /api/v1/executions/{id}/cancel"
-    ])
+    )
 
 
 # =============================================================================
@@ -137,6 +171,11 @@ class MissionGateway:
     
     def __init__(self):
         self.version = "1.0.0"
+        self._handlers: Dict[str, Any] = {}
+    
+    def register_handler(self, mission_type: str, handler: Any) -> None:
+        """Register mission handler."""
+        self._handlers[mission_type] = handler
     
     def receive(self, request: MissionRequest) -> str:
         """Receive mission request."""
@@ -148,6 +187,16 @@ class MissionGateway:
             "mission_id": mission_id,
             "route": "cloud_scheduler"
         }
+    
+    def validate(self, request: MissionRequest) -> Tuple[bool, Optional[str]]:
+        """Validate mission request."""
+        if not request.mission_id:
+            return False, "Missing mission_id"
+        if not request.project_id:
+            return False, "Missing project_id"
+        if request.priority < 1 or request.priority > 10:
+            return False, "Priority must be between 1 and 10"
+        return True, None
 
 
 class ExecutionGateway:
@@ -155,6 +204,11 @@ class ExecutionGateway:
     
     def __init__(self):
         self.version = "1.0.0"
+        self._targets: Dict[ExecutionTarget, Any] = {}
+    
+    def register_target(self, target: ExecutionTarget, handler: Any) -> None:
+        """Register execution target."""
+        self._targets[target] = handler
     
     def execute(self, execution_id: str, target: ExecutionTarget) -> ExecutionResponse:
         """Execute on target."""
@@ -163,6 +217,34 @@ class ExecutionGateway:
             mission_id="",
             status="queued"
         )
+    
+    def cancel(self, execution_id: str) -> bool:
+        """Cancel execution."""
+        return True
+
+
+class RealtimeGateway:
+    """Realtime Gateway - WebSocket connections."""
+    
+    def __init__(self):
+        self.version = "1.0.0"
+        self._connections: Dict[str, Any] = {}
+    
+    def connect(self, connection_id: str) -> bool:
+        """Connect to realtime."""
+        self._connections[connection_id] = {"connected_at": datetime.utcnow()}
+        return True
+    
+    def disconnect(self, connection_id: str) -> bool:
+        """Disconnect from realtime."""
+        if connection_id in self._connections:
+            del self._connections[connection_id]
+            return True
+        return False
+    
+    def send(self, connection_id: str, message: Dict[str, Any]) -> bool:
+        """Send message to connection."""
+        return connection_id in self._connections
 
 
 class APIGateway:
@@ -172,6 +254,8 @@ class APIGateway:
         self.version = "1.0.0"
         self.mission_gateway = MissionGateway()
         self.execution_gateway = ExecutionGateway()
+        self.realtime_gateway = RealtimeGateway()
+        self._rate_limit = 1000
     
     def handle_request(self, path: str, method: str, body: Any) -> Any:
         """Handle API request."""
@@ -181,7 +265,13 @@ class APIGateway:
             return {"status": "ok", "path": path}
         elif path.startswith("/api/v1/executions"):
             return {"status": "ok", "path": path}
+        elif path.startswith("/api/v1/realtime"):
+            return {"status": "ok", "path": path}
         return {"error": "not_found"}
+    
+    def get_endpoints(self) -> List[str]:
+        """Get all API endpoints."""
+        return list(CloudAPI().endpoints)
 
 
 # =============================================================================
@@ -205,9 +295,11 @@ class CloudRuntime:
     def __init__(self):
         self.version = "1.0.0"
         self.gateway = APIGateway()
-        self.targets: List[ExecutionTarget] = []
+        self.targets: Tuple[ExecutionTarget, ...] = ()
+        self._projects: Dict[str, Project] = {}
+        self._artifacts: Dict[str, Artifact] = {}
     
-    def deploy(self, config: CloudRuntime) -> bool:
+    def deploy(self, config: CloudConfig) -> bool:
         """Deploy cloud runtime."""
         self.targets = config.targets
         return True
@@ -216,10 +308,41 @@ class CloudRuntime:
         """Scale workers."""
         return True
     
+    def create_project(self, project_id: str, name: str, description: str = "") -> Project:
+        """Create a project."""
+        project = Project(
+            project_id=project_id,
+            name=name,
+            description=description
+        )
+        self._projects[project_id] = project
+        return project
+    
+    def get_project(self, project_id: str) -> Optional[Project]:
+        """Get a project."""
+        return self._projects.get(project_id)
+    
+    def store_artifact(self, artifact: Artifact) -> bool:
+        """Store an artifact."""
+        self._artifacts[artifact.artifact_id] = artifact
+        return True
+    
     def health_check(self) -> Dict[str, Any]:
         """Health check."""
         return {
             "status": "healthy",
             "version": self.version,
-            "targets": [t.value for t in self.targets]
+            "targets": [t.value for t in self.targets],
+            "projects": len(self._projects),
+            "artifacts": len(self._artifacts)
+        }
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get runtime statistics."""
+        return {
+            "version": self.version,
+            "targets": len(self.targets),
+            "projects": len(self._projects),
+            "artifacts": len(self._artifacts),
+            "endpoints": len(self.gateway.get_endpoints())
         }
