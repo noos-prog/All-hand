@@ -4,9 +4,10 @@ Real LLM client for the Agent Civilization.
 Uses OpenRouter (supports free models). Reads OPENROUTER_API_KEY from env.
 """
 
-import os
 import json
 import logging
+import os
+
 import aiohttp
 
 logger = logging.getLogger("llm")
@@ -16,7 +17,7 @@ DEFAULT_MODEL = os.environ.get("LLM_MODEL", "meta-llama/llama-3.3-70b-instruct:f
 
 
 class LLMClient:
-    """Async LLM client. One shared instance per process is fine."""
+    """Async LLM client. One shared instance per process."""
 
     def __init__(self, api_key: str = None, model: str = None):
         self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
@@ -65,10 +66,20 @@ class LLMClient:
                 body = await resp.text()
                 if resp.status != 200:
                     logger.error("LLM error %s: %s", resp.status, body[:500])
-                    return {"ok": False, "content": "", "error": f"LLM HTTP {resp.status}: {body[:300]}", "model": self.model}
+                    return {
+                        "ok": False,
+                        "content": "",
+                        "error": f"LLM HTTP {resp.status}: {body[:300]}",
+                        "model": self.model,
+                    }
                 data = json.loads(body)
                 content = data["choices"][0]["message"]["content"]
-                return {"ok": True, "content": content, "error": None, "model": data.get("model", self.model)}
+                return {
+                    "ok": True,
+                    "content": content,
+                    "error": None,
+                    "model": data.get("model", self.model),
+                }
         except Exception as e:
             logger.exception("LLM call failed")
             return {"ok": False, "content": "", "error": str(e), "model": self.model}

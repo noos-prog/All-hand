@@ -1,4 +1,6 @@
-"""Infrastructure agents: orchestrator, dispatcher, resource manager."""
+"""
+Infrastructure agents package.
+"""
 
 from agent_civilization.agents.infrastructure.orchestrator_agent import SystemOrchestratorAgent
 from agent_civilization.agents.infrastructure.task_dispatcher import TaskDispatcherAgent
