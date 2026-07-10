@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
-External Agent Adapter — import/attach real open-source agents to the civilization.
+External Agent Adapter — attach real open-source agents to the civilization.
 
 Any agent exposing an OpenAI-compatible chat endpoint (Ollama, LM Studio,
-vLLM, OpenRouter, LocalAI, or any A2A/HTTP agent) can join the civilization
-as a first-class citizen.
+vLLM, OpenRouter, LocalAI) can join the civilization as a first-class citizen.
 
-Register external agents via env var EXTERNAL_AGENTS (JSON list) or the
-/agents/external API endpoint:
+Register via env var EXTERNAL_AGENTS (JSON list) or the /agents/external API:
 
     EXTERNAL_AGENTS='[{"name":"my-ollama","url":"http://host:11434/v1/chat/completions","model":"llama3","api_key":""}]'
 """

@@ -2,18 +2,14 @@
 """
 Real specialist agents for the AGOS Agent Civilization.
 
-Each of the 20 specializations is a REAL agent:
-- Every agent thinks with a real LLM (OpenRouter) using a specialization-specific
-  system prompt.
+20 specializations, each a REAL agent:
+- Every agent thinks with a real LLM (OpenRouter) using a specialization-specific system prompt.
 - Several agents also use REAL tools:
     researcher      -> live web search (DuckDuckGo API)
-    data_processor  -> real statistical computation on provided data
+    data_processor  -> real statistical computation
     validator       -> real JSON validation
     test_runner     -> really executes Python code in a sandboxed subprocess
     monitor         -> real system metrics (CPU/memory via /proc)
-
-Agents are BaseAgent-compatible (CommunicationHub) and also expose a direct
-`await agent.execute(task)` API used by the FastAPI server.
 """
 
 import asyncio
@@ -33,9 +29,6 @@ from agent_civilization.core.llm import get_llm
 
 logger = logging.getLogger("real_agents")
 
-# ---------------------------------------------------------------------------
-# The 20 specializations and their REAL system prompts
-# ---------------------------------------------------------------------------
 SPECIALIZATIONS: Dict[str, str] = {
     "analyst": "You are a senior data/business analyst agent in the AGOS civilization. Analyze the input rigorously: identify patterns, trends, outliers, risks and opportunities. Always return concrete findings with confidence levels.",
     "api_integrator": "You are an API integration expert agent. Given an API or integration task, produce concrete integration plans, endpoint mappings, auth flows and working example code (with error handling).",
@@ -59,10 +52,25 @@ SPECIALIZATIONS: Dict[str, str] = {
     "validator": "You are a validation agent. Verify data, configs and outputs against rules/schemas. Return pass/fail per rule with exact violation details.",
 }
 
+SPECIALIZATION_ICONS: Dict[str, str] = {
+    "analyst": "chart-line", "api_integrator": "plug", "architect": "building",
+    "builder": "hammer", "code_generator": "code", "communicator": "comments",
+    "data_processor": "calculator", "db_manager": "database", "designer": "palette",
+    "educator": "graduation-cap", "modifier": "edit", "monitor": "monitor-heart",
+    "network_client": "network-wired", "researcher": "search", "reviewer": "check-double",
+    "self_developer": "seedling", "strategist": "chess", "surgeon": "syringe",
+    "test_runner": "vial", "validator": "shield-check",
+}
 
-# ---------------------------------------------------------------------------
-# Real tools
-# ---------------------------------------------------------------------------
+SPECIALIZATION_TOOLS: Dict[str, str] = {
+    "researcher": "web_search",
+    "data_processor": "compute_statistics",
+    "test_runner": "run_python_code",
+    "validator": "validate_json",
+    "monitor": "system_metrics",
+}
+
+
 async def web_search(query: str, max_results: int = 5) -> List[Dict[str, str]]:
     """Live search via DuckDuckGo (no key needed)."""
     results: List[Dict[str, str]] = []
@@ -87,7 +95,7 @@ def compute_statistics(numbers: List[float]) -> Dict[str, Any]:
     """Real statistics on numeric data."""
     if not numbers:
         return {"error": "no numeric data"}
-    out = {
+    out: Dict[str, Any] = {
         "count": len(numbers),
         "sum": sum(numbers),
         "mean": statistics.fmean(numbers),
@@ -141,7 +149,13 @@ def system_metrics() -> Dict[str, Any]:
             parts = f.read().split()
             metrics["load_1m"], metrics["load_5m"], metrics["load_15m"] = map(float, parts[:3])
         with open("/proc/meminfo") as f:
-            mem = {l.split(":")[0]: int(l.split()[1]) for l in f if ":" in l and l.split()[1].isdigit()}
+            mem = {}
+            for line in f:
+                if ":" in line:
+                    key = line.split(":")[0].strip()
+                    parts = line.split()
+                    if len(parts) >= 2 and parts[1].isdigit():
+                        mem[key] = int(parts[1])
         metrics["mem_total_mb"] = round(mem.get("MemTotal", 0) / 1024)
         metrics["mem_available_mb"] = round(mem.get("MemAvailable", 0) / 1024)
     except Exception as e:
@@ -167,9 +181,6 @@ def _extract_numbers(data: Any) -> List[float]:
     return nums
 
 
-# ---------------------------------------------------------------------------
-# The real agent
-# ---------------------------------------------------------------------------
 class RealSpecialistAgent:
     """A real working agent: LLM brain + real tools, per specialization."""
 
@@ -182,7 +193,6 @@ class RealSpecialistAgent:
         self.stats = {"tasks_completed": 0, "tasks_failed": 0, "total_time_s": 0.0}
         self.created_at = time.time()
 
-    # ------------------------------------------------------------------
     async def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a real task. task = {"prompt": str, "data": any (optional)}."""
         prompt = str(task.get("prompt") or task.get("description") or "").strip()
@@ -214,7 +224,7 @@ class RealSpecialistAgent:
         system = SPECIALIZATIONS[self.specialization]
         tool_output: Optional[Dict[str, Any]] = None
 
-        # --- real tool phase -------------------------------------------------
+        # --- real tool phase ---
         if self.specialization == "researcher" and prompt:
             sources = await web_search(prompt)
             tool_output = {"tool": "web_search", "sources": sources}
@@ -241,7 +251,7 @@ class RealSpecialistAgent:
             tool_output = {"tool": "system_metrics", "metrics": metrics}
             prompt = f"{prompt or 'Assess current system health.'}\n\nReal system metrics:\n{json.dumps(metrics)}"
 
-        # --- LLM reasoning phase ---------------------------------------------
+        # --- LLM reasoning phase ---
         if not prompt:
             return {"tool_output": tool_output, "answer": None, "note": "empty prompt"}
 
@@ -251,7 +261,6 @@ class RealSpecialistAgent:
             out["tool_output"] = tool_output
         if not llm_result["ok"]:
             out["llm_error"] = llm_result["error"]
-            # Tools alone can still be a real result
             if tool_output is None:
                 raise RuntimeError(llm_result["error"])
         out["model"] = llm_result["model"]
@@ -267,12 +276,9 @@ class RealSpecialistAgent:
         }
 
 
-# ---------------------------------------------------------------------------
-# Civilization factory
-# ---------------------------------------------------------------------------
 def create_civilization(agents_per_spec: int = None) -> Dict[str, List[RealSpecialistAgent]]:
     """Create the full civilization: N real agents per specialization (default from env)."""
-    n = agents_per_spec or int(os.environ.get("AGENTS_PER_SPEC", "5"))
+    n = agents_per_spec or int(os.environ.get("AGENTS_PER_SPEC", "3"))
     civilization: Dict[str, List[RealSpecialistAgent]] = {}
     agent_id = 0
     for spec in SPECIALIZATIONS:

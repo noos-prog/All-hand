@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 Task Dispatcher Agent - distributes work based on agent capabilities.
-FIXED: Proper error handling, no empty recipients.
 """
 
 import asyncio
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from agent_civilization.core.agents.base_agent import BaseAgent, Message
 from agent_civilization.core.agents.communication_hub import CommunicationHub
 
@@ -14,20 +14,18 @@ logger = logging.getLogger('task_dispatcher')
 
 
 class TaskDispatcherAgent(BaseAgent):
-    """Dispatches tasks to agents based on their capabilities and load.
-    FIXED: Proper candidate validation."""
-    
+    """Dispatches tasks to agents based on their capabilities and load."""
+
     def __init__(self, name: str, hub: CommunicationHub, **kwargs):
         super().__init__(name, hub, **kwargs)
         self.agent_capabilities: Dict[str, List[str]] = {}
         self.agent_load: Dict[str, int] = {}
         self._lock = asyncio.Lock()
-        
+
     async def _handle_message(self, message: Message):
-        """Handle messages from agents."""
         content = message.content
         action = content.get("action")
-        
+
         async with self._lock:
             if action == "register":
                 agent_name = message.sender
@@ -35,22 +33,22 @@ class TaskDispatcherAgent(BaseAgent):
                 self.agent_capabilities[agent_name] = capabilities
                 self.agent_load[agent_name] = 0
                 logger.info(f"Registered {agent_name} with capabilities: {capabilities}")
-                
+
             elif action == "load_update":
                 agent_name = message.sender
                 load = content.get("load", 0)
                 self.agent_load[agent_name] = load
-                
+
             elif action == "task_complete":
                 agent_name = message.sender
                 if agent_name in self.agent_load:
                     self.agent_load[agent_name] = max(0, self.agent_load[agent_name] - 1)
-                    
+
             elif action == "dispatch_task":
                 task_type = content.get("task_type")
                 task_id = content.get("task_id", "unknown")
                 data = content.get("data", {})
-                
+
                 selected = self._select_least_loaded(task_type)
                 if selected:
                     self.agent_load[selected] = self.agent_load.get(selected, 0) + 1
@@ -67,9 +65,8 @@ class TaskDispatcherAgent(BaseAgent):
                     logger.info(f"Dispatched {task_id} to {selected}")
                 else:
                     logger.warning(f"No agent for task type: {task_type}")
-                    
+
     def _find_eligible_agents(self, task_type: str) -> List[str]:
-        """Find agents that can handle a task type."""
         candidates = []
         for name, caps in self.agent_capabilities.items():
             if task_type in caps or "all" in caps:
@@ -77,7 +74,6 @@ class TaskDispatcherAgent(BaseAgent):
         return candidates
 
     def _select_least_loaded(self, task_type: str) -> Optional[str]:
-        """Select the agent with lowest load. FIXED: Return None instead of empty string."""
         candidates = self._find_eligible_agents(task_type)
         if not candidates:
             return None
