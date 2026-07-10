@@ -1,3 +1,5 @@
 PyYAML
-PyYAML
 aiohttp
+fastapi
+uvicorn[standard]
+pydantic
