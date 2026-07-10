@@ -2,33 +2,39 @@
 """
 AGOS Agent Civilization - REST API Server (FastAPI)
 
-Wires the whole civilization together:
 - 20 specializations x N real agents (LLM brains + real tools)
 - External open-source agents via OpenAI-compatible HTTP adapter
-- Task dispatching by specialization with async execution
-- Natural-language /chat endpoint that routes commands to the right agents
+- Task dispatching with async execution + Supabase persistence
+- Natural-language /chat endpoint that routes to the best agent
+- Server-Sent Events (SSE) for real-time task updates
+- Serves the built React frontend from /web/dist
 
-Run locally:   uvicorn server:app --reload
-Run on Render: uvicorn server:app --host 0.0.0.0 --port $PORT
+Run: uvicorn server:app --host 0.0.0.0 --port $PORT
 """
 
 import asyncio
+import json
 import logging
 import os
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agent_civilization.agents.real import SPECIALIZATIONS, create_civilization
+from agent_civilization.agents.real.real_agents import SPECIALIZATION_ICONS, SPECIALIZATION_TOOLS
 from agent_civilization.agents.external_adapter import (
     ExternalAgentAdapter,
     load_external_agents_from_env,
 )
 from agent_civilization.core.llm import get_llm
+from agent_civilization.storage import get_storage, is_configured as supabase_configured
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("server")
@@ -36,7 +42,7 @@ logger = logging.getLogger("server")
 app = FastAPI(
     title="AGOS Agent Civilization",
     description="A real AI agent civilization: 20 specializations of working agents serving the user.",
-    version="2.0.0",
+    version="3.0.0",
 )
 
 app.add_middleware(
@@ -46,12 +52,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# State
-# ---------------------------------------------------------------------------
 CIVILIZATION = create_civilization()
 EXTERNAL_AGENTS: List[ExternalAgentAdapter] = load_external_agents_from_env()
 TASKS: Dict[str, Dict[str, Any]] = {}
+TASK_EVENTS: asyncio.Queue = asyncio.Queue()
 STARTED_AT = time.time()
 MAX_TASKS_KEPT = 500
 
@@ -63,7 +67,6 @@ def _all_agents():
 
 
 def _pick_agent(specialization: str):
-    """Pick the least-busy real agent of a specialization."""
     if specialization == "external" and EXTERNAL_AGENTS:
         return min(EXTERNAL_AGENTS, key=lambda a: a.stats["tasks_completed"])
     pool = CIVILIZATION.get(specialization)
@@ -83,10 +86,34 @@ async def _run_task(task_id: str, specialization: str, prompt: str, data: Any):
     agent = _pick_agent(specialization)
     TASKS[task_id]["status"] = "running"
     TASKS[task_id]["agent"] = agent.name
+    storage = get_storage()
+    await storage.update_task(task_id, "running", agent_name=agent.name)
+
+    await TASK_EVENTS.put({"type": "task_started", "task_id": task_id, "agent": agent.name, "specialization": specialization})
+
     outcome = await agent.execute({"prompt": prompt, "data": data})
     TASKS[task_id]["status"] = "completed" if outcome["ok"] else "failed"
     TASKS[task_id]["result"] = outcome
     TASKS[task_id]["finished_at"] = time.time()
+
+    await storage.update_task(task_id, TASKS[task_id]["status"],
+                              agent_name=agent.name, result=outcome, elapsed_s=outcome.get("elapsed_s", 0))
+    await storage.upsert_agent_stats(
+        agent.name, specialization,
+        agent.stats["tasks_completed"], agent.stats["tasks_failed"], agent.stats["total_time_s"]
+    )
+    await storage.insert_event("task_completed", {
+        "task_id": task_id, "agent": agent.name, "specialization": specialization, "ok": outcome["ok"]
+    })
+
+    await TASK_EVENTS.put({
+        "type": "task_completed",
+        "task_id": task_id,
+        "agent": agent.name,
+        "specialization": specialization,
+        "ok": outcome["ok"],
+        "elapsed_s": outcome.get("elapsed_s", 0),
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +122,7 @@ async def _run_task(task_id: str, specialization: str, prompt: str, data: Any):
 class TaskRequest(BaseModel):
     specialization: str = Field(..., description="One of the 20 specializations, or 'external'")
     prompt: str = Field(..., min_length=1, max_length=20000)
-    data: Optional[Any] = Field(None, description="Optional payload: numbers for data_processor, code for test_runner, JSON string for validator...")
+    data: Optional[Any] = Field(None, description="Optional payload for tool-enabled specializations")
 
 
 class ChatRequest(BaseModel):
@@ -110,38 +137,43 @@ class ExternalAgentRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Endpoints
+# API Endpoints
 # ---------------------------------------------------------------------------
-@app.get("/")
-async def root():
+@app.get("/api")
+async def api_root():
     return {
         "name": "AGOS Agent Civilization",
+        "version": "3.0.0",
         "status": "alive",
         "specializations": list(SPECIALIZATIONS.keys()),
         "docs": "/docs",
     }
 
 
-@app.get("/system/status")
+@app.get("/api/system/status")
 async def system_status():
     agents = [a.snapshot() for a in _all_agents()]
     completed = sum(a["stats"]["tasks_completed"] for a in agents)
     failed = sum(a["stats"]["tasks_failed"] for a in agents)
+    storage = get_storage()
+    db_tasks = await storage.get_tasks(limit=500)
     return {
         "status": "healthy",
         "uptime_s": round(time.time() - STARTED_AT),
         "llm_configured": get_llm().available,
         "llm_model": get_llm().model,
+        "supabase_configured": supabase_configured(),
         "specializations": len(SPECIALIZATIONS),
         "total_agents": len(agents),
         "external_agents": len(EXTERNAL_AGENTS),
         "tasks_completed": completed,
         "tasks_failed": failed,
         "tasks_in_memory": len(TASKS),
+        "tasks_in_db": len(db_tasks) if supabase_configured() else None,
     }
 
 
-@app.get("/agents")
+@app.get("/api/agents")
 async def list_agents(specialization: Optional[str] = None):
     agents = [a.snapshot() for a in _all_agents()]
     if specialization:
@@ -149,17 +181,23 @@ async def list_agents(specialization: Optional[str] = None):
     return {"count": len(agents), "agents": agents}
 
 
-@app.get("/specializations")
+@app.get("/api/specializations")
 async def list_specializations():
     return {
         "specializations": [
-            {"name": name, "description": prompt.split(".")[0], "agents": len(CIVILIZATION[name])}
+            {
+                "name": name,
+                "description": prompt.split(".")[0],
+                "agents": len(CIVILIZATION[name]),
+                "icon": SPECIALIZATION_ICONS.get(name, "robot"),
+                "tool": SPECIALIZATION_TOOLS.get(name),
+            }
             for name, prompt in SPECIALIZATIONS.items()
         ]
     }
 
 
-@app.post("/tasks", status_code=202)
+@app.post("/api/tasks", status_code=202)
 async def create_task(req: TaskRequest):
     if req.specialization not in SPECIALIZATIONS and req.specialization != "external":
         raise HTTPException(400, f"Unknown specialization '{req.specialization}'. Valid: {list(SPECIALIZATIONS)} + ['external']")
@@ -173,22 +211,56 @@ async def create_task(req: TaskRequest):
         "result": None,
     }
     _prune_tasks()
+    storage = get_storage()
+    await storage.insert_task(task_id, req.specialization, req.prompt, "queued")
+    await storage.insert_event("task_created", {"task_id": task_id, "specialization": req.specialization})
+    await TASK_EVENTS.put({"type": "task_created", "task_id": task_id, "specialization": req.specialization})
     asyncio.create_task(_run_task(task_id, req.specialization, req.prompt, req.data))
     return {"task_id": task_id, "status": "queued"}
 
 
-@app.get("/tasks")
+@app.get("/api/tasks")
 async def list_tasks(limit: int = 50):
+    storage = get_storage()
+    if supabase_configured():
+        db_tasks = await storage.get_tasks(limit=limit)
+        if db_tasks:
+            return {"count": len(db_tasks), "tasks": db_tasks, "source": "database"}
     items = sorted(TASKS.values(), key=lambda t: t["created_at"], reverse=True)[: min(limit, 200)]
-    return {"count": len(items), "tasks": items}
+    return {"count": len(items), "tasks": items, "source": "memory"}
 
 
-@app.get("/tasks/{task_id}")
+@app.get("/api/tasks/{task_id}")
 async def get_task(task_id: str):
     task = TASKS.get(task_id)
     if not task:
         raise HTTPException(404, "task not found")
     return task
+
+
+@app.get("/api/events")
+async def list_events(limit: int = 50):
+    storage = get_storage()
+    events = await storage.get_events(limit=limit)
+    return {"count": len(events), "events": events}
+
+
+@app.get("/api/events/stream")
+async def event_stream():
+    """Server-Sent Events stream for real-time task updates."""
+    async def generate():
+        while True:
+            try:
+                event = await asyncio.wait_for(TASK_EVENTS.get(), timeout=30)
+                yield f"data: {json.dumps(event)}\n\n"
+            except asyncio.TimeoutError:
+                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    })
 
 
 ROUTER_SYSTEM = (
@@ -199,7 +271,7 @@ ROUTER_SYSTEM = (
 )
 
 
-@app.post("/chat")
+@app.post("/api/chat")
 async def chat(req: ChatRequest):
     """Natural-language command: route to the best specialist and execute."""
     llm = get_llm()
@@ -214,16 +286,42 @@ async def chat(req: ChatRequest):
                     break
     agent = _pick_agent(spec)
     outcome = await agent.execute({"prompt": req.message})
+
+    task_id = uuid.uuid4().hex[:12]
+    TASKS[task_id] = {
+        "id": task_id,
+        "specialization": spec,
+        "prompt": req.message[:500],
+        "status": "completed" if outcome["ok"] else "failed",
+        "created_at": time.time(),
+        "finished_at": time.time(),
+        "result": outcome,
+        "agent": agent.name,
+    }
+    _prune_tasks()
+
+    storage = get_storage()
+    await storage.insert_task(task_id, spec, req.message, "completed")
+    await storage.update_task(task_id, "completed", agent_name=agent.name,
+                              result=outcome, elapsed_s=outcome.get("elapsed_s", 0))
+    await storage.upsert_agent_stats(
+        agent.name, spec,
+        agent.stats["tasks_completed"], agent.stats["tasks_failed"], agent.stats["total_time_s"]
+    )
+    await storage.insert_event("chat_completed", {
+        "task_id": task_id, "agent": agent.name, "specialization": spec, "ok": outcome["ok"]
+    })
+
     return {
+        "task_id": task_id,
         "routed_to": spec,
         "agent": agent.name,
         "outcome": outcome,
     }
 
 
-@app.post("/agents/external", status_code=201)
+@app.post("/api/agents/external", status_code=201)
 async def register_external_agent(req: ExternalAgentRequest):
-    """Attach a real open-source agent (any OpenAI-compatible endpoint)."""
     if not req.url.startswith(("http://", "https://")):
         raise HTTPException(400, "url must be http(s)")
     if any(a.name == req.name for a in EXTERNAL_AGENTS):
@@ -233,13 +331,34 @@ async def register_external_agent(req: ExternalAgentRequest):
     return {"registered": adapter.snapshot()}
 
 
-@app.delete("/agents/external/{name}")
+@app.delete("/api/agents/external/{name}")
 async def remove_external_agent(name: str):
     for i, a in enumerate(EXTERNAL_AGENTS):
         if a.name == name:
             EXTERNAL_AGENTS.pop(i)
             return {"removed": name}
     raise HTTPException(404, "external agent not found")
+
+
+# ---------------------------------------------------------------------------
+# Serve the frontend (built React app from /web/dist)
+# ---------------------------------------------------------------------------
+WEB_DIST = Path(__file__).parent / "web" / "dist"
+
+if WEB_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(WEB_DIST / "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        if full_path.startswith("api") or full_path.startswith("docs") or full_path.startswith("openapi"):
+            raise HTTPException(404)
+        file_path = WEB_DIST / full_path
+        if file_path.is_file():
+            return FileResponse(str(file_path))
+        index = WEB_DIST / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
+        raise HTTPException(404, "frontend not built")
 
 
 if __name__ == "__main__":
