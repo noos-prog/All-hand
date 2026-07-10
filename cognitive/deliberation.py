@@ -1,78 +1,57 @@
-"""AGOS Universal Deliberation Engine - EXECUTION-000030."""
-from typing import Any, Dict, List
-from dataclasses import dataclass, field
+"""Deliberation engine: multi-round reasoning with pruning."""
 
-DELIBERATION_PIPELINE = ["Generate Alternatives", "Evaluate Alternatives", "Challenge Assumptions", "Simulate Outcomes", "Collect Evidence", "Rank Alternatives", "Choose Strategy", "Approve Decision"]
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, List, Mapping, Sequence
+
+from cognition.model import Alternative, Decision
+
+from .decision import DecisionEngine
+from .evaluation import EvaluationEngine, EvaluationResult
+
 
 @dataclass
-class Deliberation:
-    deliberation_id: str
-    pipeline: List[str] = field(default_factory=list)
-    alternatives: List[str] = field(default_factory=list)
-    evidence: List[str] = field(default_factory=list)
-    chosen: str = ""
-    status: str = "pending"
+class DeliberationResult:
+    rounds: int
+    decisions: List[Decision] = field(default_factory=list)
+    evaluations: List[EvaluationResult] = field(default_factory=list)
+    final: Decision | None = None
 
-class AlternativeGenerator:
-    def generate(self, context: Dict[str, Any]) -> List[str]:
-        return ["alternative_1", "alternative_2"]
 
-class CritiqueEngine:
-    def critique(self, alternative: str) -> Dict[str, Any]:
-        return {"critiqued": True, "weaknesses": []}
+@dataclass
+class DeliberationEngine:
+    decision: DecisionEngine = field(default_factory=DecisionEngine)
+    evaluation: EvaluationEngine = field(default_factory=EvaluationEngine)
+    max_rounds: int = 3
+    min_confidence: float = 0.75
 
-class TradeoffAnalyzer:
-    def analyze(self, alternatives: List[str]) -> Dict[str, Any]:
-        return {"tradeoffs": [], "analyzed": True}
+    def deliberate(
+        self,
+        alternatives: Sequence[Alternative],
+        context: Mapping[str, Any],
+        criteria: Mapping[str, float],
+    ) -> DeliberationResult:
+        result = DeliberationResult(rounds=0)
+        pool: List[Alternative] = list(alternatives)
+        ctx = dict(context)
 
-class UniversalDeliberationEngine:
-    """
-    Universal Deliberation Engine.
-    
-    Before any high-impact decision, AGOS performs structured deliberation.
-    
-    Pipeline (8 Steps):
-    1. Generate Alternatives
-    2. Evaluate Alternatives
-    3. Challenge Assumptions
-    4. Simulate Outcomes
-    5. Collect Evidence
-    6. Rank Alternatives
-    7. Choose Strategy
-    8. Approve Decision
-    
-    Implements:
-    ✅ Deliberation Runtime, Alternative Generator, Critique Engine
-    ✅ Trade-off Analyzer, Risk Challenger
-    ✅ Decision Reviewer, Consensus Generator
-    
-    SUCCESS CONDITION:
-    Every critical Mission produces an explainable, evidence-backed 
-    and reproducible decision before execution begins.
-    
-    OUTPUT: Universal Deliberation Platform
-    """
-    def __init__(self):
-        self.version = "1.0.0"
-        self.alternative_generator = AlternativeGenerator()
-        self.critique_engine = CritiqueEngine()
-        self.tradeoff_analyzer = TradeoffAnalyzer()
-    
-    def deliberate(self, context: Dict[str, Any]) -> Deliberation:
-        from datetime import datetime
-        alternatives = self.alternative_generator.generate(context)
-        
-        deliberation = Deliberation(
-            deliberation_id=f"del_{datetime.now().timestamp()}",
-            pipeline=DELIBERATION_PIPELINE,
-            alternatives=alternatives,
-            status="completed"
-        )
-        return deliberation
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "pipeline_steps": DELIBERATION_PIPELINE,
-            "status": "COGNITIVE_FOUNDATION_PHASE_COMPLETE"
-        }
+        for _ in range(self.max_rounds):
+            if not pool:
+                break
+            result.rounds += 1
+            decision = self.decision.decide(pool, ctx)
+            evaluation = self.evaluation.evaluate(decision.chosen, criteria)
+            result.decisions.append(decision)
+            result.evaluations.append(evaluation)
+            result.final = decision
+
+            if decision.confidence >= self.min_confidence and evaluation.approved:
+                break
+
+            # prune lowest-scoring half and continue with a boost on remaining
+            ranked = sorted(pool, key=lambda a: a.score, reverse=True)
+            pool = ranked[: max(1, len(ranked) // 2)]
+            ctx = {**ctx, f"boost:{decision.chosen.name}": ctx.get(f"boost:{decision.chosen.name}", 0.0) + 0.1}
+
+        return result

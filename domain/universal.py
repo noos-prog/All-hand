@@ -1,90 +1,74 @@
-"""AGOS Universal Operating System Foundation - Complete the final abstraction layer."""
+"""UniversalDomain: cross-vertical, cross-industry domain adapter.
+
+Bundles an :class:`EnterpriseGraph`, a :class:`DomainFramework` and a
+:class:`DomainBuilder` with a default policy pack that fits any domain
+(finance, healthcare, manufacturing, software, government).
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Mapping
 
-FINAL_GUARANTEES = [
-    "Kernel is domain-independent",
-    "Cognition is domain-independent",
-    "Knowledge is domain-independent",
-    "Execution is domain-independent",
-    "Capabilities are domain-independent",
-    "Providers are domain-independent",
-    "Skills are domain-independent",
-    "Workflows are domain-independent",
-    "Policies are domain-independent",
-    "Artifacts are domain-independent"
-]
+from .entities import EntityKind
+from .enterprise import EnterpriseGraph
+from .framework import DomainFramework, DomainPolicy, PolicyResult
+from .sdk import DomainBuilder
 
-ARCHITECTURE_STATUS = [
-    "Kernel Locked",
-    "Runtime Locked",
-    "Contracts Locked",
-    "SDK Locked",
-    "Ontology Locked",
-    "Universal APIs Locked",
-    "Universal Composition Locked",
-    "Universal Cognition Locked",
-    "Universal Knowledge Locked"
-]
 
-class UniversalOSFoundation:
-    """
-    AGOS Universal Operating System Foundation.
-    
-    Final Guarantees:
-    ✅ Kernel is domain-independent
-    ✅ Cognition is domain-independent
-    ✅ Knowledge is domain-independent
-    ✅ Execution is domain-independent
-    ✅ Capabilities are domain-independent
-    ✅ Providers are domain-independent
-    ✅ Skills are domain-independent
-    ✅ Workflows are domain-independent
-    ✅ Policies are domain-independent
-    ✅ Artifacts are domain-independent
-    
-    Architecture Status:
-    ✅ Kernel Locked
-    ✅ Runtime Locked
-    ✅ Contracts Locked
-    ✅ SDK Locked
-    ✅ Ontology Locked
-    ✅ Universal APIs Locked
-    ✅ Universal Composition Locked
-    ✅ Universal Cognition Locked
-    ✅ Universal Knowledge Locked
-    
-    Future Expansion:
-    Future expansion occurs exclusively through Domains, Capabilities, Providers, 
-    Skills, Adapters, SDKs and Extensions.
-    Kernel redesign is permanently prohibited.
-    """
-    def __init__(self):
-        self.version = "10.0.0"
-        self.status = "foundation_complete"
-    
-    def get_architecture_status(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "status": self.status,
-            "final_guarantees": FINAL_GUARANTEES,
-            "architecture_status": ARCHITECTURE_STATUS,
-            "kernel_redesign": "permanently_prohibited"
-        }
-    
-    def release(self) -> Dict[str, Any]:
-        return {
-            "product": "AGOS Universal Operating System",
-            "version": self.version,
-            "status": "released",
-            "guarantees": len(FINAL_GUARANTEES),
-            "architecture_locked": len(ARCHITECTURE_STATUS),
-            "ready_for_expansion": True
-        }
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "final_guarantees": FINAL_GUARANTEES,
-            "architecture_status": ARCHITECTURE_STATUS
-        }
+def _has_owner(entity, ctx: Mapping[str, Any]) -> bool:  # noqa: ARG001
+    return bool(entity.properties.get("owner"))
+
+
+def _budget_positive(entity, ctx: Mapping[str, Any]) -> bool:  # noqa: ARG001
+    amount = entity.properties.get("amount", 0)
+    try:
+        return float(amount) >= 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _risk_mitigated(entity, ctx: Mapping[str, Any]) -> bool:  # noqa: ARG001
+    return bool(entity.properties.get("mitigation"))
+
+
+DEFAULT_POLICIES = (
+    DomainPolicy(
+        name="every_project_has_owner",
+        applies_to=EntityKind.PROJECT,
+        check=_has_owner,
+        message="project must declare an 'owner' property",
+    ),
+    DomainPolicy(
+        name="budget_amount_non_negative",
+        applies_to=EntityKind.BUDGET,
+        check=_budget_positive,
+        message="budget amount must be non-negative",
+    ),
+    DomainPolicy(
+        name="risk_has_mitigation",
+        applies_to=EntityKind.RISK,
+        check=_risk_mitigated,
+        message="risk must declare a 'mitigation' property",
+    ),
+)
+
+
+@dataclass
+class UniversalDomain:
+    graph: EnterpriseGraph = field(default_factory=EnterpriseGraph)
+    framework: DomainFramework = field(default_factory=DomainFramework)
+
+    def __post_init__(self) -> None:
+        self.framework.register_many(DEFAULT_POLICIES)
+
+    @classmethod
+    def from_builder(cls, builder: DomainBuilder) -> "UniversalDomain":
+        return cls(graph=builder.build())
+
+    def validate(self, context: Mapping[str, Any] | None = None) -> list[PolicyResult]:
+        return self.framework.evaluate(self.graph, context)
+
+    def is_healthy(self) -> bool:
+        results = self.validate()
+        return not self.framework.failing(results)

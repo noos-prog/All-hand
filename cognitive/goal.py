@@ -1,62 +1,48 @@
-"""AGOS Universal Goal System - EXECUTION-000023."""
+"""Goal engine: goal decomposition and priority-ordered scheduling."""
+
+from __future__ import annotations
+
+import heapq
+import itertools
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import List, Sequence, Tuple
+
+from cognition.model import Goal
+
 
 @dataclass
-class Goal:
-    goal_id: str
-    description: str
-    parent_id: str = ""
-    priority: int = 1
-    status: str = "pending"
-    dependencies: List[str] = field(default_factory=list)
+class GoalEngine:
+    _counter: itertools.count = field(default_factory=itertools.count)
+    _heap: List[Tuple[int, int, Goal]] = field(default_factory=list)
 
-class GoalRegistry:
-    def __init__(self):
-        self._goals: Dict[str, Goal] = {}
-    
-    def register(self, goal: Goal) -> bool:
-        self._goals[goal.goal_id] = goal
-        return True
-    
-    def get(self, goal_id: str) -> Goal:
-        return self._goals.get(goal_id)
+    def submit(self, goal: Goal) -> None:
+        # heapq is min-heap: negate priority so higher priority runs first
+        heapq.heappush(self._heap, (-goal.priority, next(self._counter), goal))
 
-class GoalHierarchy:
-    def build(self, goal_id: str) -> Dict[str, Any]:
-        return {"goal_id": goal_id, "children": []}
+    def submit_many(self, goals: Sequence[Goal]) -> None:
+        for g in goals:
+            self.submit(g)
 
-class UniversalGoalPlatform:
-    """
-    Universal Goal Platform.
-    
-    Goals drive every Mission.
-    Tasks never become first-class citizens.
-    Goals produce Plans. Plans produce Executions.
-    
-    Implements:
-    ✅ Goal Runtime, Registry, Graph, Hierarchy
-    ✅ Goal Prioritization, Progress, Dependencies, Validation
-    
-    OUTPUT: Universal Goal Platform
-    """
-    def __init__(self):
-        self.version = "1.0.0"
-        self.registry = GoalRegistry()
-        self.hierarchy = GoalHierarchy()
-    
-    def create_goal(self, description: str, parent_id: str = "") -> Goal:
-        from datetime import datetime
-        goal = Goal(
-            goal_id=f"goal_{datetime.now().timestamp()}",
-            description=description,
-            parent_id=parent_id
-        )
-        self.registry.register(goal)
-        return goal
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "total_goals": len(self.registry._goals)
-        }
+    def pop(self) -> Goal | None:
+        if not self._heap:
+            return None
+        return heapq.heappop(self._heap)[2]
+
+    def peek(self) -> Goal | None:
+        return self._heap[0][2] if self._heap else None
+
+    def pending(self) -> int:
+        return len(self._heap)
+
+    def decompose(self, goal: Goal, subgoals: Sequence[str]) -> List[Goal]:
+        out: List[Goal] = []
+        for i, name in enumerate(subgoals):
+            child = Goal(
+                name=f"{goal.name}::{name}",
+                description=f"subgoal {i + 1}/{len(subgoals)} of {goal.name}",
+                success_criteria=goal.success_criteria,
+                priority=max(0, goal.priority - 1),
+            )
+            self.submit(child)
+            out.append(child)
+        return out

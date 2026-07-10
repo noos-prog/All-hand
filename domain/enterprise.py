@@ -1,85 +1,131 @@
-"""AGOS Universal Autonomous Enterprise - Represent an entire enterprise as structured AGOS knowledge."""
+"""Enterprise graph with typed traversal and dependency resolution."""
+
+from __future__ import annotations
+
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
-ENTERPRISE_MODEL_COMPONENTS = ["Departments", "Employees", "AI Agents", "Projects", "Processes", "Policies", "Objectives", "Risks", "Budgets", "Infrastructure", "Products", "Services", "Knowledge"]
+from .entities import Entity, EntityKind, Relationship, RelationshipKind
 
-@dataclass
-class EnterpriseEntity:
-    entity_id: str
-    type: str
-    name: str
-    properties: Dict[str, Any] = field(default_factory=dict)
+
+class EnterpriseGraphError(Exception):
+    """Base error for enterprise graph operations."""
+
 
 class EnterpriseGraph:
-    def __init__(self):
-        self._entities: Dict[str, EnterpriseEntity] = {}
-    
-    def add(self, entity: EnterpriseEntity) -> None:
+    def __init__(self) -> None:
+        self._entities: Dict[str, Entity] = {}
+        self._out: Dict[str, List[Relationship]] = defaultdict(list)
+        self._in: Dict[str, List[Relationship]] = defaultdict(list)
+        self._edges: Set[Tuple[str, str, str]] = set()
+
+    # -------------------------------------------------------------- entities
+    def add_entity(self, entity: Entity) -> Entity:
+        if entity.entity_id in self._entities:
+            raise EnterpriseGraphError(f"duplicate entity {entity.entity_id}")
         self._entities[entity.entity_id] = entity
-    
-    def get(self, entity_id: str) -> EnterpriseEntity:
-        return self._entities.get(entity_id)
+        return entity
 
-class EnterpriseRuntime:
-    def operate(self, entity: EnterpriseEntity) -> Dict[str, Any]:
-        return {"entity": entity.name, "status": "operational"}
+    def get(self, entity_id: str) -> Entity:
+        try:
+            return self._entities[entity_id]
+        except KeyError as exc:
+            raise EnterpriseGraphError(f"unknown entity {entity_id}") from exc
 
-class EnterpriseKnowledge:
-    def represent(self, entity: EnterpriseEntity) -> Dict[str, Any]:
-        return {"knowledge": entity.properties, "entity": entity.name}
+    def entities(self, *, kind: Optional[EntityKind] = None) -> List[Entity]:
+        values = list(self._entities.values())
+        if kind is not None:
+            values = [e for e in values if e.kind == kind]
+        return sorted(values, key=lambda e: (e.kind.value, e.name))
 
-class EnterprisePolicies:
-    def apply(self, entity: EnterpriseEntity) -> Dict[str, Any]:
-        return {"policies": [], "entity": entity.entity_id}
+    # ------------------------------------------------------------------ edges
+    def relate(self, rel: Relationship) -> Relationship:
+        self.get(rel.source)
+        self.get(rel.target)
+        key = rel.key()
+        if key in self._edges:
+            return rel
+        self._edges.add(key)
+        self._out[rel.source].append(rel)
+        self._in[rel.target].append(rel)
+        return rel
 
-class EnterpriseAnalytics:
-    def analyze(self) -> Dict[str, Any]:
-        return {"total_entities": len(self._entities), "status": "analyzed"}
+    def outgoing(self, entity_id: str, *, kind: Optional[RelationshipKind] = None) -> List[Relationship]:
+        rels = list(self._out.get(entity_id, ()))
+        return [r for r in rels if kind is None or r.kind == kind]
 
-class EnterprisePlanning:
-    def plan(self, objective: str) -> Dict[str, Any]:
-        return {"objective": objective, "plan": []}
+    def incoming(self, entity_id: str, *, kind: Optional[RelationshipKind] = None) -> List[Relationship]:
+        rels = list(self._in.get(entity_id, ()))
+        return [r for r in rels if kind is None or r.kind == kind]
 
-class EnterpriseOptimization:
-    def optimize(self) -> Dict[str, Any]:
-        return {"optimized": True, "improvements": []}
+    # ------------------------------------------------------------- traversal
+    def neighbors(self, entity_id: str, *, kind: Optional[RelationshipKind] = None) -> List[Entity]:
+        return [self.get(r.target) for r in self.outgoing(entity_id, kind=kind)]
 
-class UniversalAutonomousEnterprise:
-    """
-    Universal Autonomous Enterprise.
-    
-    Target: AGOS can reason over complete enterprises using the same cognition and mission architecture
-    
-    Model Components (13):
-    ✅ Departments, Employees, AI Agents, Projects
-    ✅ Processes, Policies, Objectives, Risks
-    ✅ Budgets, Infrastructure, Products, Services
-    ✅ Knowledge
-    """
-    def __init__(self):
-        self.version = "10.0.0"
-        self.graph = EnterpriseGraph()
-        self.runtime = EnterpriseRuntime()
-        self.knowledge = EnterpriseKnowledge()
-        self.policies = EnterprisePolicies()
-        self.analytics = EnterpriseAnalytics()
-        self.planning = EnterprisePlanning()
-        self.optimization = EnterpriseOptimization()
-    
-    def model_enterprise(self, name: str, components: List[str]) -> Dict[str, Any]:
-        for component in components:
-            entity = EnterpriseEntity(
-                entity_id=f"ent_{name}_{component}",
-                type=component,
-                name=name
-            )
-            self.graph.add(entity)
-        return {"name": name, "components": len(components), "status": "modeled"}
-    
-    def get_statistics(self) -> Dict[str, Any]:
+    def bfs(self, start: str) -> Iterator[Entity]:
+        self.get(start)
+        seen: Set[str] = {start}
+        queue: deque[str] = deque([start])
+        while queue:
+            nid = queue.popleft()
+            yield self.get(nid)
+            for rel in self._out.get(nid, ()):
+                if rel.target not in seen:
+                    seen.add(rel.target)
+                    queue.append(rel.target)
+
+    def topo_order(self, kind: RelationshipKind = RelationshipKind.DEPENDS_ON) -> List[Entity]:
+        indeg: Dict[str, int] = {eid: 0 for eid in self._entities}
+        adj: Dict[str, List[str]] = defaultdict(list)
+        for rels in self._out.values():
+            for r in rels:
+                if r.kind is kind:
+                    adj[r.source].append(r.target)
+                    indeg[r.target] = indeg.get(r.target, 0) + 1
+
+        queue = deque(sorted(eid for eid, d in indeg.items() if d == 0))
+        order: List[Entity] = []
+        while queue:
+            eid = queue.popleft()
+            order.append(self.get(eid))
+            for nxt in sorted(adj[eid]):
+                indeg[nxt] -= 1
+                if indeg[nxt] == 0:
+                    queue.append(nxt)
+        if len(order) != len(self._entities):
+            raise EnterpriseGraphError("cycle detected on kind={}".format(kind.value))
+        return order
+
+    # ------------------------------------------------------------------ stats
+    def statistics(self) -> Dict[str, int]:
+        by_kind: Dict[str, int] = defaultdict(int)
+        for e in self._entities.values():
+            by_kind[e.kind.value] += 1
         return {
-            "version": self.version,
-            "model_components": ENTERPRISE_MODEL_COMPONENTS,
-            "total_entities": len(self.graph._entities)
+            "entities": len(self._entities),
+            "relationships": len(self._edges),
+            **{f"kind:{k}": v for k, v in by_kind.items()},
         }
+
+    def __len__(self) -> int:
+        return len(self._entities)
+
+
+@dataclass
+class UniversalAutonomousEnterprise:
+    """Facade over an :class:`EnterpriseGraph` with convenience helpers."""
+
+    graph: EnterpriseGraph = field(default_factory=EnterpriseGraph)
+
+    def register(self, entities: Iterable[Entity]) -> List[Entity]:
+        return [self.graph.add_entity(e) for e in entities]
+
+    def link(self, rels: Iterable[Relationship]) -> List[Relationship]:
+        return [self.graph.relate(r) for r in rels]
+
+    def execution_order(self) -> List[Entity]:
+        return self.graph.topo_order()
+
+    def summary(self) -> Dict[str, int]:
+        return self.graph.statistics()

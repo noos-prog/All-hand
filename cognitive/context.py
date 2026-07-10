@@ -1,73 +1,67 @@
-"""AGOS Universal Context Engine - EXECUTION-000021."""
+"""Context frames: layered, immutable views over cognitive state."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
-from datetime import datetime
+from typing import Any, Dict, Iterator, Mapping, Optional
 
-CONTEXT_SOURCES = ["Mission", "Knowledge", "World Model", "Policies", "Artifacts", "Projects", "Repositories", "Organizations", "History", "Evidence", "User Intent", "Execution State"]
 
-@dataclass
-class Context:
-    context_id: str
-    mission_id: str
-    sources: List[str] = field(default_factory=list)
-    data: Dict[str, Any] = field(default_factory=dict)
-    created_at: str = ""
-    version: str = "1.0.0"
+@dataclass(frozen=True)
+class ContextFrame:
+    """An immutable snapshot of a scope's variables."""
 
-class ContextRegistry:
-    def __init__(self):
-        self._contexts: Dict[str, Context] = {}
-    
-    def register(self, context: Context) -> bool:
-        self._contexts[context.context_id] = context
-        return True
-    
-    def get(self, context_id: str) -> Context:
-        return self._contexts.get(context_id)
+    name: str
+    values: Mapping[str, Any] = field(default_factory=dict)
+    parent: Optional["ContextFrame"] = None
 
-class ContextComposer:
-    def compose(self, sources: List[str]) -> Dict[str, Any]:
-        return {"composed": True, "sources": sources}
+    def resolve(self, key: str, default: Any = None) -> Any:
+        if key in self.values:
+            return self.values[key]
+        if self.parent is not None:
+            return self.parent.resolve(key, default)
+        return default
 
-class UniversalContextEngine:
-    """
-    Universal Context Engine.
-    
-    Context is the most valuable resource in AGOS.
-    Every decision must be derived from Context.
-    No component may create private context.
-    
-    Implements:
-    ✅ Context Runtime, Registry, Builder, Composer
-    ✅ Resolver, Validator, Optimizer
-    ✅ Snapshot, Replay, Diff
-    
-    Context Sources (12):
-    ✅ Mission, Knowledge, World Model, Policies, Artifacts
-    ✅ Projects, Repositories, Organizations, History
-    ✅ Evidence, User Intent, Execution State
-    
-    OUTPUT: Universal Context Platform
-    """
-    def __init__(self):
-        self.version = "1.0.0"
-        self.registry = ContextRegistry()
-        self.composer = ContextComposer()
-    
-    def create_context(self, mission_id: str, sources: List[str], data: Dict[str, Any] = None) -> Context:
-        context = Context(
-            context_id=f"ctx_{mission_id}_{datetime.now().timestamp()}",
-            mission_id=mission_id,
-            sources=sources,
-            data=data or {},
-            created_at=datetime.now().isoformat()
-        )
-        self.registry.register(context)
-        return context
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "context_sources": CONTEXT_SOURCES,
-            "total_contexts": len(self.registry._contexts)
-        }
+    def extended(self, **overrides: Any) -> "ContextFrame":
+        return ContextFrame(name=self.name, values={**self.values, **overrides}, parent=self.parent)
+
+    def flatten(self) -> Dict[str, Any]:
+        merged: Dict[str, Any] = {}
+        stack = []
+        node: Optional[ContextFrame] = self
+        while node is not None:
+            stack.append(node)
+            node = node.parent
+        for frame in reversed(stack):
+            merged.update(frame.values)
+        return merged
+
+
+class ContextEngine:
+    """Push/pop stack of context frames."""
+
+    def __init__(self, root: Optional[ContextFrame] = None) -> None:
+        self._current: Optional[ContextFrame] = root
+
+    def push(self, name: str, **values: Any) -> ContextFrame:
+        frame = ContextFrame(name=name, values=values, parent=self._current)
+        self._current = frame
+        return frame
+
+    def pop(self) -> Optional[ContextFrame]:
+        if self._current is None:
+            return None
+        popped = self._current
+        self._current = popped.parent
+        return popped
+
+    def current(self) -> Optional[ContextFrame]:
+        return self._current
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._current.resolve(key, default) if self._current else default
+
+    def __iter__(self) -> Iterator[ContextFrame]:
+        node = self._current
+        while node is not None:
+            yield node
+            node = node.parent

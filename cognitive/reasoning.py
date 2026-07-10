@@ -1,51 +1,52 @@
-"""AGOS Universal Reasoning Runtime - EXECUTION-000027."""
-from typing import Any, Dict, List
+"""Reasoning engine: forward-chaining over declarative rules."""
 
-REASONING_TYPES = ["Deductive", "Inductive", "Abductive", "Constraint", "Graph", "Policy", "Knowledge", "Architecture"]
+from __future__ import annotations
 
-class DeductiveReasoner:
-    def reason(self, premises: List[str]) -> str:
-        return "deduced_conclusion"
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Mapping, Tuple
 
-class InductiveReasoner:
-    def reason(self, observations: List[str]) -> str:
-        return "induced_hypothesis"
 
-class AbductiveReasoner:
-    def reason(self, observations: List[str]) -> str:
-        return "abduced_explanation"
+@dataclass(frozen=True)
+class Rule:
+    name: str
+    condition: Callable[[Mapping[str, Any]], bool]
+    conclusion: Callable[[Dict[str, Any]], Dict[str, Any]]
 
-class UniversalReasoningRuntime:
-    """
-    Universal Reasoning Runtime.
-    
-    Separate reasoning from execution forever.
-    
-    RULE: Reasoning never executes actions.
-    
-    Reasoning Types (8):
-    ✅ Deductive, Inductive, Abductive, Constraint
-    ✅ Graph, Policy, Knowledge, Architecture
-    
-    OUTPUT: Universal Reasoning Runtime
-    """
-    def __init__(self):
-        self.version = "1.0.0"
-        self.deductive = DeductiveReasoner()
-        self.inductive = InductiveReasoner()
-        self.abductive = AbductiveReasoner()
-    
-    def reason(self, reasoning_type: str, data: List[str]) -> str:
-        if reasoning_type == "deductive":
-            return self.deductive.reason(data)
-        elif reasoning_type == "inductive":
-            return self.inductive.reason(data)
-        elif reasoning_type == "abductive":
-            return self.abductive.reason(data)
-        return "reasoned"
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "reasoning_types": REASONING_TYPES
-        }
+
+@dataclass(frozen=True)
+class ReasoningStep:
+    rule: str
+    before: Mapping[str, Any]
+    after: Mapping[str, Any]
+
+
+@dataclass
+class ReasoningEngine:
+    rules: List[Rule] = field(default_factory=list)
+    max_iterations: int = 64
+
+    def add(self, rule: Rule) -> None:
+        self.rules.append(rule)
+
+    def infer(self, facts: Mapping[str, Any]) -> Tuple[Dict[str, Any], List[ReasoningStep]]:
+        state: Dict[str, Any] = dict(facts)
+        trace: List[ReasoningStep] = []
+        for _ in range(self.max_iterations):
+            fired = False
+            for rule in self.rules:
+                try:
+                    matched = bool(rule.condition(state))
+                except Exception:
+                    matched = False
+                if not matched:
+                    continue
+                before = dict(state)
+                delta = rule.conclusion(state) or {}
+                if not delta or all(state.get(k) == v for k, v in delta.items()):
+                    continue
+                state.update(delta)
+                trace.append(ReasoningStep(rule=rule.name, before=before, after=dict(state)))
+                fired = True
+            if not fired:
+                break
+        return state, trace

@@ -1,79 +1,51 @@
-"""AGOS Universal Decision Engine - EXECUTION-000026."""
-from dataclasses import dataclass, field
-from typing import Any, Dict, List
-from datetime import datetime
+"""Decision engine: pick the best alternative under a scoring policy."""
 
-DECISION_FIELDS = ["Inputs", "Alternatives", "Evidence", "Reasoning", "Confidence", "Chosen Option", "Rejected Options", "Expected Outcome"]
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+from typing import Any, Callable, Mapping, Sequence
+
+from cognition.model import Alternative, CognitiveError, Decision
+
+
+ScoringFn = Callable[[Alternative, Mapping[str, Any]], float]
+
+
+def _default_score(alt: Alternative, context: Mapping[str, Any]) -> float:
+    boost = float(context.get(f"boost:{alt.name}", 0.0))
+    return alt.score + boost
+
 
 @dataclass
-class Decision:
-    decision_id: str
-    description: str
-    inputs: List[str] = field(default_factory=list)
-    alternatives: List[str] = field(default_factory=list)
-    evidence: List[str] = field(default_factory=list)
-    reasoning: str = ""
-    confidence: float = 0.0
-    chosen_option: str = ""
-    rejected_options: List[str] = field(default_factory=list)
-    expected_outcome: str = ""
-    created_at: str = ""
+class DecisionEngine:
+    scoring: ScoringFn = _default_score
+    tie_breaker: Callable[[Sequence[Alternative]], Alternative] = field(
+        default=lambda alts: sorted(alts, key=lambda a: a.name)[0]
+    )
 
-class DecisionRegistry:
-    def __init__(self):
-        self._decisions: Dict[str, Decision] = {}
-    
-    def register(self, decision: Decision) -> bool:
-        self._decisions[decision.decision_id] = decision
-        return True
-    
-    def get(self, decision_id: str) -> Decision:
-        return self._decisions.get(decision_id)
-
-class UniversalDecisionPlatform:
-    """
-    Universal Decision Platform.
-    
-    Every decision is explicit. No implicit reasoning.
-    
-    Implements:
-    ✅ Decision Runtime, Registry, Graph, Simulator
-    ✅ Evaluator, Optimizer, History, Replay
-    
-    Every Decision Stores (8):
-    ✅ Inputs, Alternatives, Evidence, Reasoning
-    ✅ Confidence, Chosen Option, Rejected Options, Expected Outcome
-    
-    OUTPUT: Universal Decision Platform
-    """
-    def __init__(self):
-        self.version = "1.0.0"
-        self.registry = DecisionRegistry()
-    
-    def create_decision(self, description: str, alternatives: List[str]) -> Decision:
-        decision = Decision(
-            decision_id=f"dec_{datetime.now().timestamp()}",
-            description=description,
-            alternatives=alternatives,
-            created_at=datetime.now().isoformat()
+    def decide(
+        self, alternatives: Sequence[Alternative], context: Mapping[str, Any]
+    ) -> Decision:
+        if not alternatives:
+            raise CognitiveError("no alternatives to decide over")
+        scored = [
+            Alternative(
+                name=alt.name,
+                payload=alt.payload,
+                score=self.scoring(alt, context),
+                rationale=alt.rationale,
+            )
+            for alt in alternatives
+        ]
+        top_score = max(a.score for a in scored)
+        top = [a for a in scored if math.isclose(a.score, top_score)]
+        chosen = top[0] if len(top) == 1 else self.tie_breaker(top)
+        total = sum(math.exp(a.score - top_score) for a in scored)
+        confidence = 1.0 / total if total > 0 else 1.0
+        return Decision(
+            chosen=chosen,
+            considered=tuple(sorted(scored, key=lambda a: a.score, reverse=True)),
+            rationale=chosen.rationale or f"top score {chosen.score:.3f}",
+            confidence=confidence,
         )
-        self.registry.register(decision)
-        return decision
-    
-    def make_decision(self, decision_id: str, chosen: str, evidence: List[str], reasoning: str, confidence: float) -> bool:
-        decision = self.registry.get(decision_id)
-        if decision:
-            decision.chosen_option = chosen
-            decision.evidence = evidence
-            decision.reasoning = reasoning
-            decision.confidence = confidence
-            decision.rejected_options = [a for a in decision.alternatives if a != chosen]
-            return True
-        return False
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "decision_fields": DECISION_FIELDS,
-            "total_decisions": len(self.registry._decisions)
-        }

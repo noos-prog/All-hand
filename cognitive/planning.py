@@ -1,53 +1,67 @@
-"""AGOS Universal Planning Engine - EXECUTION-000025."""
-from dataclasses import dataclass, field
-from typing import Any, Dict, List
+"""Planning engine: build a validated DAG plan from a goal + task list."""
 
-PIPELINE_STEPS = ["Intent", "Goals", "Constraints", "Knowledge", "Capabilities", "Execution Graph", "Mission Plan"]
+from __future__ import annotations
+
+from collections import defaultdict, deque
+from dataclasses import dataclass
+from typing import Dict, List, Sequence
+
+from cognition.model import CognitiveError, Goal, Plan, PlanStep
+
 
 @dataclass
-class MissionPlan:
-    plan_id: str
-    steps: List[Dict[str, Any]] = field(default_factory=list)
-    status: str = "planned"
+class Task:
+    name: str
+    inputs: Dict[str, object]
+    depends_on: List[str]
 
-class PlanValidator:
-    def validate(self, plan: MissionPlan) -> bool:
-        return len(plan.steps) > 0
 
-class PlanSimulator:
-    def simulate(self, plan: MissionPlan) -> Dict[str, Any]:
-        return {"simulated": True, "outcome": "success"}
+class PlanningEngine:
+    def plan(self, goal: Goal, tasks: Sequence[Task]) -> Plan:
+        by_name = {t.name: t for t in tasks}
+        if len(by_name) != len(tasks):
+            raise CognitiveError("task names must be unique")
 
-class UniversalPlanningEngine:
-    """
-    Universal Planning Engine.
-    
-    Generate execution plans independent of providers.
-    
-    Pipeline:
-    Intent → Goals → Constraints → Knowledge → Capabilities → Execution Graph → Mission Plan
-    
-    Implements:
-    ✅ Planner, Alternative Planner, Plan Optimizer
-    ✅ Plan Validator, Simulator, Benchmark
-    
-    OUTPUT: Universal Planning Platform
-    """
-    def __init__(self):
-        self.version = "1.0.0"
-        self.validator = PlanValidator()
-        self.simulator = PlanSimulator()
-    
-    def create_plan(self, intent: str, goals: List[str], constraints: List[str]) -> MissionPlan:
-        from datetime import datetime
-        plan = MissionPlan(
-            plan_id=f"plan_{datetime.now().timestamp()}",
-            steps=[{"intent": intent, "goals": goals, "constraints": constraints}]
-        )
+        order = self._topo_sort(tasks)
+        index_by_name = {name: i for i, name in enumerate(order)}
+        steps: List[PlanStep] = []
+        for i, name in enumerate(order):
+            task = by_name[name]
+            deps = tuple(index_by_name[d] for d in task.depends_on)
+            steps.append(
+                PlanStep(
+                    index=i,
+                    action=task.name,
+                    inputs=dict(task.inputs),
+                    expected_outcome=f"{task.name} complete",
+                    depends_on=deps,
+                )
+            )
+        plan = Plan(goal=goal, steps=tuple(steps))
+        if not plan.is_dag():
+            raise CognitiveError("planner produced an invalid DAG")
         return plan
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "pipeline_steps": PIPELINE_STEPS
-        }
+
+    @staticmethod
+    def _topo_sort(tasks: Sequence[Task]) -> List[str]:
+        indeg: Dict[str, int] = defaultdict(int)
+        graph: Dict[str, List[str]] = defaultdict(list)
+        for t in tasks:
+            indeg.setdefault(t.name, 0)
+            for d in t.depends_on:
+                graph[d].append(t.name)
+                indeg[t.name] += 1
+
+        queue = deque(sorted(n for n, d in indeg.items() if d == 0))
+        out: List[str] = []
+        while queue:
+            n = queue.popleft()
+            out.append(n)
+            for m in sorted(graph[n]):
+                indeg[m] -= 1
+                if indeg[m] == 0:
+                    queue.append(m)
+
+        if len(out) != len(indeg):
+            raise CognitiveError("cyclic dependency in tasks")
+        return out

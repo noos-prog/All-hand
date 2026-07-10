@@ -1,37 +1,42 @@
-"""AGOS Universal Strategy Engine - EXECUTION-000029."""
-from typing import Any, Dict, List
+"""Strategy engine: select a named strategy against a context."""
 
-STRATEGIES = ["Fastest", "Cheapest", "Safest", "Highest Quality", "Lowest Risk", "Balanced", "Custom"]
+from __future__ import annotations
 
-class StrategySelector:
-    def select(self, strategy_type: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        return {"strategy": strategy_type, "selected": True}
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Mapping
 
-class UniversalStrategyPlatform:
-    """
-    Universal Strategy Platform.
-    
-    Strategies determine how goals become executable plans.
-    
-    Strategies (7):
-    ✅ Fastest, Cheapest, Safest, Highest Quality
-    ✅ Lowest Risk, Balanced, Custom
-    
-    Implements:
-    ✅ Strategy Runtime, Registry, Templates
-    ✅ Strategy Optimizer, Evaluator, Selector
-    
-    OUTPUT: Universal Strategy Platform
-    """
-    def __init__(self):
-        self.version = "1.0.0"
-        self.selector = StrategySelector()
-    
-    def select_strategy(self, strategy_type: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        return self.selector.select(strategy_type, context)
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "strategies": STRATEGIES
-        }
+
+@dataclass(frozen=True)
+class Strategy:
+    name: str
+    applies: Callable[[Mapping[str, Any]], bool]
+    apply: Callable[[Mapping[str, Any]], Dict[str, Any]]
+    priority: int = 0
+
+
+@dataclass
+class StrategyEngine:
+    strategies: Dict[str, Strategy] = field(default_factory=dict)
+
+    def register(self, strategy: Strategy) -> None:
+        self.strategies[strategy.name] = strategy
+
+    def select(self, context: Mapping[str, Any]) -> Strategy | None:
+        matches = [s for s in self.strategies.values() if _safe(s.applies, context)]
+        if not matches:
+            return None
+        matches.sort(key=lambda s: s.priority, reverse=True)
+        return matches[0]
+
+    def apply(self, context: Mapping[str, Any]) -> Dict[str, Any]:
+        s = self.select(context)
+        if s is None:
+            return {}
+        return s.apply(context) or {}
+
+
+def _safe(fn: Callable[[Mapping[str, Any]], bool], ctx: Mapping[str, Any]) -> bool:
+    try:
+        return bool(fn(ctx))
+    except Exception:
+        return False

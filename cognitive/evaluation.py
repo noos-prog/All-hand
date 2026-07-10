@@ -1,40 +1,45 @@
-"""AGOS Universal Evaluation Engine - EXECUTION-000028."""
-from typing import Any, Dict, List
+"""Evaluation engine: score a candidate against weighted criteria."""
 
-EVALUATE_TYPES = ["Plans", "Capabilities", "Providers", "Agents", "Models", "Architectures", "Policies", "Knowledge", "Repositories"]
+from __future__ import annotations
 
-METRICS = ["Quality", "Risk", "Cost", "Latency", "Complexity", "Reliability", "Maintainability", "Compatibility"]
+from dataclasses import dataclass
+from typing import Any, Dict, Mapping
+
+
+@dataclass
+class EvaluationResult:
+    candidate: Any
+    score: float
+    breakdown: Dict[str, float]
+    approved: bool
+    threshold: float
+
 
 class EvaluationEngine:
-    def evaluate(self, candidate: str, metrics: List[str]) -> Dict[str, Any]:
-        return {metric: 0.8 for metric in metrics}
+    def __init__(self, threshold: float = 0.5) -> None:
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError("threshold must be within [0, 1]")
+        self.threshold = threshold
 
-class UniversalEvaluationPlatform:
-    """
-    Universal Evaluation Platform.
-    
-    Evaluate every candidate before execution.
-    
-    Evaluate (9):
-    ✅ Plans, Capabilities, Providers, Agents, Models
-    ✅ Architectures, Policies, Knowledge, Repositories
-    
-    Metrics (8):
-    ✅ Quality, Risk, Cost, Latency, Complexity
-    ✅ Reliability, Maintainability, Compatibility
-    
-    OUTPUT: Universal Evaluation Platform
-    """
-    def __init__(self):
-        self.version = "1.0.0"
-        self.engine = EvaluationEngine()
-    
-    def evaluate(self, candidate: str) -> Dict[str, Any]:
-        return self.engine.evaluate(candidate, METRICS)
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "evaluate_types": EVALUATE_TYPES,
-            "metrics": METRICS
-        }
+    def evaluate(self, candidate: Any, criteria: Mapping[str, float]) -> EvaluationResult:
+        payload = getattr(candidate, "payload", candidate)
+        breakdown: Dict[str, float] = {}
+        for key, weight in criteria.items():
+            raw = _extract(payload, key)
+            breakdown[key] = float(raw) * float(weight)
+        total_weight = sum(abs(w) for w in criteria.values()) or 1.0
+        score = sum(breakdown.values()) / total_weight
+        score = max(0.0, min(1.0, score))
+        return EvaluationResult(
+            candidate=candidate,
+            score=score,
+            breakdown=breakdown,
+            approved=score >= self.threshold,
+            threshold=self.threshold,
+        )
+
+
+def _extract(payload: Any, key: str) -> float:
+    if isinstance(payload, Mapping):
+        return float(payload.get(key, 0.0))
+    return float(getattr(payload, key, 0.0))
