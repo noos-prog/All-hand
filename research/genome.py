@@ -1,60 +1,76 @@
-"""AGOS Engineering Genome - Universal engineering DNA representation."""
+"""Agent Genome - Represent AI agents as genomes for evolution."""
+from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
+import uuid
 
-GENOME_TYPES = ["Repository Genome", "Project Genome", "Architecture Genome", "Mission Genome", "Capability Genome", "Provider Genome", "Skill Genome", "Workflow Genome", "Knowledge Genome", "Organization Genome"]
+AGENT_GENOME_FIELDS = ["Identity", "Capabilities", "Behaviors", "Memory", "Skills", "Knowledge", "Preferences", "Goals"]
+
+
+class GenomeStatus(Enum):
+    """Genome status."""
+    ACTIVE = "active"
+    EVOLVING = "evolving"
+    ARCHIVED = "archived"
+
 
 @dataclass
-class Genome:
-    genome_id: str
+class Gene:
+    """A single gene in the agent genome."""
+    gene_id: str
     name: str
-    type: str
-    sequence: str = ""
+    gene_type: str
+    value: Any
+    expression: float = 1.0
+
+
+@dataclass
+class AgentGenome:
+    """Complete genome representation of an AI agent."""
+    genome_id: str
+    agent_id: str
+    genes: List[Gene] = field(default_factory=list)
+    chromosome_count: int = 8
+    status: GenomeStatus = GenomeStatus.ACTIVE
+    fitness_score: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=datetime.utcnow)
 
-class GenomeParser:
-    def parse(self, data: str) -> Genome:
-        return Genome(genome_id="genome_1", name="Parsed", type="generic")
 
-class GenomeCompiler:
-    def compile(self, genome: Genome) -> str:
-        return f"compiled_{genome.genome_id}"
-
-class GenomeValidator:
-    def validate(self, genome: Genome) -> bool:
-        return True
-
-class GenomeDiffEngine:
-    def diff(self, genome1: Genome, genome2: Genome) -> Dict[str, Any]:
-        return {"differences": []}
-
-class GenomeMergeEngine:
-    def merge(self, genomes: List[Genome]) -> Genome:
-        return genomes[0] if genomes else Genome(genome_id="merged", name="Merged", type="composite")
-
-class EngineeringGenome:
-    """
-    Engineering Genome.
+class GenomeAnalyzer:
+    """Analyzer for agent genomes."""
     
-    Target: Universal Engineering Genome
+    def analyze(self, genome: AgentGenome) -> Dict[str, Any]:
+        return {
+            "gene_count": len(genome.genes),
+            "fitness_score": genome.fitness_score,
+            "chromosome_count": genome.chromosome_count,
+        }
+
+
+class GenomeEngine:
+    """Engine for genome operations."""
     
-    Genome Types:
-    ✅ Repository, Project, Architecture, Mission, Capability
-    ✅ Provider, Skill, Workflow, Knowledge, Organization
-    """
     def __init__(self):
-        self.version = "3.0.0"
-        self.parser = GenomeParser()
-        self.compiler = GenomeCompiler()
-        self.validator = GenomeValidator()
-        self.diff_engine = GenomeDiffEngine()
-        self.merge_engine = GenomeMergeEngine()
+        self._genomes: Dict[str, AgentGenome] = {}
+        self.analyzer = GenomeAnalyzer()
     
-    def create_genome(self, name: str, genome_type: str) -> Genome:
-        return Genome(genome_id=f"genome_{name}", name=name, type=genome_type)
+    def create_genome(self, agent_id: str) -> AgentGenome:
+        genome = AgentGenome(
+            genome_id=str(uuid.uuid4()),
+            agent_id=agent_id,
+        )
+        self._genomes[genome.genome_id] = genome
+        return genome
+    
+    def evolve(self, genome: AgentGenome) -> AgentGenome:
+        genome.fitness_score += 0.1
+        return genome
     
     def get_statistics(self) -> Dict[str, Any]:
         return {
-            "version": self.version,
-            "genome_types": GENOME_TYPES
+            "total_genomes": len(self._genomes),
+            "active_genomes": sum(1 for g in self._genomes.values() if g.status == GenomeStatus.ACTIVE),
         }

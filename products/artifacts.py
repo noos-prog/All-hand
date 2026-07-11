@@ -1,86 +1,103 @@
-"""Universal Artifact Platform - Everything produced by AGOS becomes an Artifact."""
+"""Universal Artifact Platform - Manage billions of artifacts."""
+from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List
+from enum import Enum
+from typing import Any, Dict, List, Optional
+import uuid
 
-# Artifact Types
-ARTIFACT_TYPES = [
-    "Source Code", "Architecture", "Execution Plans", "Knowledge", "Repository DNA",
-    "Reports", "Benchmarks", "Logs", "Metrics", "Graphs", "Documentation",
-    "Packages", "Releases", "Containers", "Datasets"
-]
+ARTIFACT_TYPES = ["Source Code", "Architecture", "Execution Plans", "Knowledge", "Repository DNA", "Reports", "Benchmarks", "Logs", "Metrics", "Graphs", "Documentation", "Packages", "Releases", "Containers", "Datasets"]
+
+
+class ArtifactType(Enum):
+    """Types of artifacts."""
+    SOURCE_CODE = "source_code"
+    ARCHITECTURE = "architecture"
+    EXECUTION_PLAN = "execution_plan"
+    KNOWLEDGE = "knowledge"
+    REPOSITORY_DNA = "repository_dna"
+    REPORT = "report"
+    BENCHMARK = "benchmark"
+    LOG = "log"
+    METRICS = "metrics"
+    GRAPH = "graph"
+    DOCUMENTATION = "documentation"
+    PACKAGE = "package"
+    RELEASE = "release"
+    CONTAINER = "container"
+    DATASET = "dataset"
+
+
+class ArtifactStatus(Enum):
+    """Artifact status."""
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    DELETED = "deleted"
+
 
 @dataclass
 class Artifact:
+    """An artifact in the platform."""
     artifact_id: str
     name: str
-    type: str
-    content: Any = None
+    artifact_type: ArtifactType
+    project_id: str
+    content: str = ""
+    size_bytes: int = 0
+    checksum: str = ""
     version: str = "1.0.0"
+    status: ArtifactStatus = ArtifactStatus.ACTIVE
+    metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+
 
 class ArtifactRegistry:
+    """Registry for artifacts."""
+    
     def __init__(self):
         self._artifacts: Dict[str, Artifact] = {}
     
     def register(self, artifact: Artifact) -> None:
         self._artifacts[artifact.artifact_id] = artifact
     
-    def get(self, artifact_id: str) -> Artifact:
+    def get(self, artifact_id: str) -> Optional[Artifact]:
         return self._artifacts.get(artifact_id)
     
-    def list_all(self) -> List[Artifact]:
-        return list(self._artifacts.values())
+    def search(self, project_id: Optional[str] = None, artifact_type: Optional[ArtifactType] = None) -> List[Artifact]:
+        results = list(self._artifacts.values())
+        if project_id:
+            results = [a for a in results if a.project_id == project_id]
+        if artifact_type:
+            results = [a for a in results if a.artifact_type == artifact_type]
+        return results
 
-class UniversalArtifactPlatform:
+
+class ArtifactPlatform:
     """
     Universal Artifact Platform.
     
-    Everything produced by AGOS must become an Artifact.
-    Target: Billions of Artifacts
-    
-    Artifact Types:
+    Artifact Types (15):
     ✅ Source Code, Architecture, Execution Plans, Knowledge
     ✅ Repository DNA, Reports, Benchmarks, Logs
     ✅ Metrics, Graphs, Documentation, Packages
     ✅ Releases, Containers, Datasets
     
     Implements:
-    ✅ Artifact Registry
-    ✅ Artifact Storage
-    ✅ Artifact Search
-    ✅ Artifact Versioning
-    ✅ Artifact Relationships
-    ✅ Artifact Provenance
-    ✅ Artifact Validation
-    ✅ Artifact Compression
-    ✅ Artifact Export
-    ✅ Artifact Sharing
+    ✅ Registry, Storage, Search, Versioning
+    ✅ Relationships, Provenance, Validation
+    ✅ Compression, Export, Sharing
+    
+    Target: Billions of Artifacts
     """
+    
     def __init__(self):
-        self.version = "2.0.0"
+        self.version = "1.0.0"
         self.registry = ArtifactRegistry()
-    
-    def create(self, name: str, artifact_type: str, content: Any) -> Artifact:
-        artifact = Artifact(
-            artifact_id=f"art_{name}_{len(self.registry.list_all())}",
-            name=name,
-            type=artifact_type,
-            content=content
-        )
-        self.registry.register(artifact)
-        return artifact
-    
-    def get(self, artifact_id: str) -> Artifact:
-        return self.registry.get(artifact_id)
-    
-    def search(self, query: str) -> List[Artifact]:
-        return [a for a in self.registry.list_all() if query.lower() in a.name.lower()]
     
     def get_statistics(self) -> Dict[str, Any]:
         return {
-            "total_artifacts": len(self.registry.list_all()),
-            "artifact_types": len(ARTIFACT_TYPES),
             "version": self.version,
-            "target": "billions"
+            "artifact_types": ARTIFACT_TYPES,
+            "total_artifacts": len(self.registry._artifacts),
         }

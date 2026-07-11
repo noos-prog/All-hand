@@ -1,49 +1,61 @@
-"""AGOS Universal Protocol Layer - Support any current or future communication protocol through adapters."""
+"""AGOS Universal Protocol Layer - Support for all engineering protocols."""
+from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional, Callable
+import uuid
 
 SUPPORTED_PROTOCOLS = ["HTTP", "HTTPS", "WebSocket", "gRPC", "MCP", "REST", "GraphQL", "SSE", "CLI", "TCP", "UDP", "QUIC", "Future Protocols"]
 
+
+class ProtocolType(Enum):
+    """Types of supported protocols."""
+    HTTP = "http"
+    HTTPS = "https"
+    WEBSOCKET = "websocket"
+    GRPC = "grpc"
+    MCP = "mcp"
+    REST = "rest"
+    GRAPHQL = "graphql"
+    SSE = "sse"
+    CLI = "cli"
+
+
+class ConnectionState(Enum):
+    """Connection state."""
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    ERROR = "error"
+
+
 @dataclass
-class Protocol:
-    protocol_id: str
-    name: str
-    version: str
-    adapters: List[str] = field(default_factory=list)
+class Message:
+    """A message in the protocol."""
+    message_id: str
+    protocol: ProtocolType
+    payload: Any
+    headers: Dict[str, str] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-class ProtocolRegistry:
-    def __init__(self):
-        self._protocols: Dict[str, Protocol] = {}
-    
-    def register(self, protocol: Protocol) -> None:
-        self._protocols[protocol.protocol_id] = protocol
-    
-    def get(self, protocol_id: str) -> Protocol:
-        return self._protocols.get(protocol_id)
 
-class ProtocolGateway:
-    def route(self, protocol: str, message: Any) -> Dict[str, Any]:
-        return {"protocol": protocol, "status": "routed"}
+@dataclass
+class ProtocolMessage:
+    """A protocol message with metadata."""
+    msg_id: str
+    msg_type: str
+    content: Any
+    source: str = ""
+    target: str = ""
+    ack_required: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-class ProtocolTranslator:
-    def translate(self, from_protocol: str, to_protocol: str, message: Any) -> Any:
-        return f"translated_{message}"
 
-class ProtocolValidator:
-    def validate(self, protocol: str, message: Any) -> bool:
-        return True
-
-class ProtocolSecurity:
-    def secure(self, protocol: str, message: Any) -> Dict[str, Any]:
-        return {"protocol": protocol, "security": "enabled", "message": message}
-
-class ProtocolMonitoring:
-    def monitor(self, protocol: str) -> Dict[str, Any]:
-        return {"protocol": protocol, "latency_ms": 10, "errors": 0}
-
-class UniversalProtocolLayer:
+class ProtocolHandler:
     """
-    Universal Protocol Layer.
+    Universal Protocol Handler.
     
     Rule: Kernel remains protocol-agnostic
     
@@ -52,26 +64,40 @@ class UniversalProtocolLayer:
     ✅ REST, GraphQL, SSE, CLI
     ✅ TCP, UDP, QUIC, Future Protocols
     """
+    
     def __init__(self):
-        self.version = "10.0.0"
-        self.registry = ProtocolRegistry()
-        self.gateway = ProtocolGateway()
-        self.translator = ProtocolTranslator()
-        self.validator = ProtocolValidator()
-        self.security = ProtocolSecurity()
-        self.monitoring = ProtocolMonitoring()
+        self.version = "1.0.0"
+        self.handlers: Dict[ProtocolType, Callable] = {}
+        self.connections: Dict[str, ConnectionState] = {}
     
-    def register_protocol(self, name: str, version: str) -> Protocol:
-        protocol = Protocol(protocol_id=f"proto_{name}", name=name, version=version)
-        self.registry.register(protocol)
-        return protocol
+    def register_handler(self, protocol: ProtocolType, handler: Callable) -> None:
+        """Register a handler for a protocol."""
+        self.handlers[protocol] = handler
     
-    def send(self, protocol: str, message: Any) -> Dict[str, Any]:
-        return self.gateway.route(protocol, message)
+    def send(self, protocol: ProtocolType, message: Message) -> bool:
+        """Send a message using a protocol."""
+        handler = self.handlers.get(protocol)
+        if handler:
+            return handler(message)
+        return False
+    
+    def connect(self, connection_id: str, protocol: ProtocolType) -> bool:
+        """Establish a connection."""
+        self.connections[connection_id] = ConnectionState.CONNECTING
+        self.connections[connection_id] = ConnectionState.CONNECTED
+        return True
+    
+    def disconnect(self, connection_id: str) -> bool:
+        """Disconnect a connection."""
+        if connection_id in self.connections:
+            self.connections[connection_id] = ConnectionState.DISCONNECTED
+            return True
+        return False
     
     def get_statistics(self) -> Dict[str, Any]:
         return {
             "version": self.version,
             "supported_protocols": SUPPORTED_PROTOCOLS,
-            "registered_protocols": len(self.registry._protocols)
+            "registered_handlers": len(self.handlers),
+            "active_connections": sum(1 for s in self.connections.values() if s == ConnectionState.CONNECTED),
         }

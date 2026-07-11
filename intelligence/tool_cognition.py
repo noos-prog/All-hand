@@ -1,58 +1,75 @@
 """AGOS Universal Tool Cognition Layer - Semantic understanding layer for every engineering tool."""
+from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+import uuid
 
 TOOL_MODEL_FIELDS = ["Inputs", "Outputs", "Constraints", "Requirements", "Capabilities", "Performance", "Reliability", "Cost", "Dependencies"]
 
+
 @dataclass
-class Tool:
+class ToolInput:
+    """Input specification for a tool."""
+    name: str
+    type: str
+    required: bool = True
+    description: str = ""
+    default: Optional[Any] = None
+
+
+@dataclass
+class ToolOutput:
+    """Output specification for a tool."""
+    name: str
+    type: str
+    description: str = ""
+
+
+@dataclass
+class ToolConstraint:
+    """Constraint for tool execution."""
+    constraint_type: str
+    value: Any
+    description: str = ""
+
+
+@dataclass
+class ToolRequirement:
+    """Requirement for using a tool."""
+    requirement_type: str
+    value: Any
+    description: str = ""
+
+
+@dataclass
+class ToolCapability:
+    """A capability provided by a tool."""
+    capability_id: str
+    name: str
+    description: str
+    inputs: List[ToolInput] = field(default_factory=list)
+    outputs: List[ToolOutput] = field(default_factory=list)
+    constraints: List[ToolConstraint] = field(default_factory=list)
+    requirements: List[ToolRequirement] = field(default_factory=list)
+
+
+@dataclass
+class ToolDescriptor:
+    """Complete descriptor for a tool."""
     tool_id: str
     name: str
     category: str
+    description: str
+    version: str
+    capabilities: List[ToolCapability] = field(default_factory=list)
     inputs: List[str] = field(default_factory=list)
     outputs: List[str] = field(default_factory=list)
-    capabilities: List[str] = field(default_factory=list)
+    dependencies: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-class ToolKnowledgeGraph:
-    def __init__(self):
-        self._tools: Dict[str, Tool] = {}
-    
-    def add(self, tool: Tool) -> None:
-        self._tools[tool.tool_id] = tool
-    
-    def get(self, tool_id: str) -> Tool:
-        return self._tools.get(tool_id)
 
-class ToolOntology:
-    def classify(self, tool: Tool) -> Dict[str, Any]:
-        return {"ontology_class": tool.category, "confidence": 0.95}
-
-class ToolCapabilityGraph:
-    def map(self, tool: Tool) -> Dict[str, Any]:
-        return {"capabilities": tool.capabilities, "relationships": []}
-
-class ToolCompatibilityEngine:
-    def check(self, tool1: Tool, tool2: Tool) -> bool:
-        return True
-
-class ToolRecommendationEngine:
-    def recommend(self, task: str) -> List[Tool]:
-        return []
-
-class ToolBenchmarkEngine:
-    def benchmark(self, tool_id: str) -> Dict[str, Any]:
-        return {"tool_id": tool_id, "latency_ms": 50, "reliability": 0.99}
-
-class ToolDiscoveryEngine:
-    def discover(self, query: str) -> List[Tool]:
-        return [t for t in self._tools.values() if query.lower() in t.name.lower()]
-
-class ToolEvolutionEngine:
-    def evolve(self, tool_id: str) -> Dict[str, Any]:
-        return {"tool_id": tool_id, "evolved": True}
-
-class UniversalToolCognitionLayer:
+class ToolCognition:
     """
     Universal Tool Cognition Layer.
     
@@ -62,25 +79,32 @@ class UniversalToolCognitionLayer:
     ✅ Inputs, Outputs, Constraints, Requirements
     ✅ Capabilities, Performance, Reliability, Cost, Dependencies
     """
-    def __init__(self):
-        self.version = "10.0.0"
-        self.knowledge_graph = ToolKnowledgeGraph()
-        self.ontology = ToolOntology()
-        self.capability_graph = ToolCapabilityGraph()
-        self.compatibility = ToolCompatibilityEngine()
-        self.recommendations = ToolRecommendationEngine()
-        self.benchmark = ToolBenchmarkEngine()
-        self.discovery = ToolDiscoveryEngine()
-        self.evolution = ToolEvolutionEngine()
     
-    def register_tool(self, name: str, category: str) -> Tool:
-        tool = Tool(tool_id=f"tool_{name}", name=name, category=category)
-        self.knowledge_graph.add(tool)
-        return tool
+    def __init__(self):
+        self.version = "1.0.0"
+        self._tools: Dict[str, ToolDescriptor] = {}
+        self._capabilities_index: Dict[str, List[str]] = {}
+    
+    def register_tool(self, tool: ToolDescriptor) -> None:
+        """Register a tool with its capabilities."""
+        self._tools[tool.tool_id] = tool
+        for cap in tool.capabilities:
+            if cap.name not in self._capabilities_index:
+                self._capabilities_index[cap.name] = []
+            self._capabilities_index[cap.name].append(tool.tool_id)
+    
+    def get_tool(self, tool_id: str) -> Optional[ToolDescriptor]:
+        """Get a tool by ID."""
+        return self._tools.get(tool_id)
+    
+    def find_tools_by_capability(self, capability: str) -> List[ToolDescriptor]:
+        """Find tools that provide a specific capability."""
+        tool_ids = self._capabilities_index.get(capability, [])
+        return [self._tools[tid] for tid in tool_ids if tid in self._tools]
     
     def get_statistics(self) -> Dict[str, Any]:
         return {
             "version": self.version,
-            "model_fields": TOOL_MODEL_FIELDS,
-            "registered_tools": len(self.knowledge_graph._tools)
+            "registered_tools": len(self._tools),
+            "capabilities": len(self._capabilities_index),
         }

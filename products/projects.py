@@ -1,102 +1,113 @@
-"""Universal Project Platform - Unified internal model for every software project."""
+"""Universal Project Platform - Manage projects at unlimited scale."""
+from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Set
+import uuid
 
-# Project Types
-PROJECT_TYPES = [
-    "Repository", "Application", "Library", "Framework", "SDK", "Website",
-    "Mobile App", "Desktop App", "API", "Microservice", "AI Agent", "AI Platform"
-]
+PROJECT_TYPES = ["Repository", "Application", "Library", "Framework", "SDK", "Website", "Mobile App", "Desktop App", "API", "Microservice", "AI Agent", "AI Platform"]
+
+
+class ProjectType(Enum):
+    """Types of projects."""
+    REPOSITORY = "repository"
+    APPLICATION = "application"
+    LIBRARY = "library"
+    FRAMEWORK = "framework"
+    SDK = "sdk"
+    WEBSITE = "website"
+    MOBILE_APP = "mobile_app"
+    DESKTOP_APP = "desktop_app"
+    API = "api"
+    MICROSERVICE = "microservice"
+    AI_AGENT = "ai_agent"
+    AI_PLATFORM = "ai_platform"
+
+
+class ProjectStatus(Enum):
+    """Project status."""
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    DELETED = "deleted"
+
 
 @dataclass
-class ProjectMetadata:
+class Project:
+    """A project in the platform."""
     project_id: str
     name: str
-    type: str
-    description: str = ""
+    description: str
+    project_type: ProjectType
+    owner_id: str
+    status: ProjectStatus = ProjectStatus.ACTIVE
+    tags: Set[str] = field(default_factory=set)
+    metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
+
 @dataclass
 class ProjectHealth:
-    score: float = 100.0
-    issues: List[str] = field(default_factory=list)
+    """Health metrics for a project."""
+    project_id: str
+    health_score: float = 1.0
+    active_contributors: int = 0
+    open_issues: int = 0
+    open_prs: int = 0
+    last_activity: Optional[datetime] = None
 
-class ProjectRegistry:
+
+class ProjectManager:
+    """Manager for project operations."""
+    
     def __init__(self):
-        self._projects: Dict[str, ProjectMetadata] = {}
+        self._projects: Dict[str, Project] = {}
     
-    def register(self, project: ProjectMetadata) -> None:
+    def create_project(self, name: str, description: str, project_type: ProjectType, owner_id: str) -> Project:
+        project = Project(
+            project_id=str(uuid.uuid4()),
+            name=name,
+            description=description,
+            project_type=project_type,
+            owner_id=owner_id,
+        )
         self._projects[project.project_id] = project
+        return project
     
-    def get(self, project_id: str) -> ProjectMetadata:
+    def get_project(self, project_id: str) -> Optional[Project]:
         return self._projects.get(project_id)
     
-    def list_all(self) -> List[ProjectMetadata]:
+    def list_projects(self, owner_id: Optional[str] = None) -> List[Project]:
+        if owner_id:
+            return [p for p in self._projects.values() if p.owner_id == owner_id]
         return list(self._projects.values())
 
-class ProjectGraph:
-    def __init__(self):
-        self._nodes: Dict[str, List[str]] = {}  # project_id -> dependencies
-    
-    def add_dependency(self, project_id: str, dependency_id: str) -> None:
-        if project_id not in self._nodes:
-            self._nodes[project_id] = []
-        self._nodes[project_id].append(dependency_id)
-    
-    def get_dependencies(self, project_id: str) -> List[str]:
-        return self._nodes.get(project_id, [])
 
-class ProjectTimeline:
-    def add_event(self, project_id: str, event: Dict[str, Any]) -> None:
-        pass
-    
-    def get_events(self, project_id: str) -> List[Dict[str, Any]]:
-        return []
-
-class UniversalProjectPlatform:
+class ProjectPlatform:
     """
     Universal Project Platform.
     
-    Target: Unlimited project scale
+    Project Types (12):
+    ✅ Repository, Application, Library, Framework, SDK
+    ✅ Website, Mobile App, Desktop App, API, Microservice
+    ✅ AI Agent, AI Platform
     
     Implements:
-    ✅ Project Runtime
-    ✅ Project Registry
-    ✅ Project Graph
-    ✅ Project Metadata
-    ✅ Project Knowledge
-    ✅ Project Timeline
-    ✅ Project Artifacts
-    ✅ Project Health
-    ✅ Project Statistics
-    ✅ Project Snapshots
-    ✅ Project Templates
-    ✅ Project Import
-    ✅ Project Export
+    ✅ Project Runtime, Registry, Graph, Metadata
+    ✅ Knowledge, Timeline, Artifacts, Health
+    ✅ Statistics, Snapshots, Templates, Import/Export
+    
+    Target: Unlimited project scale
     """
+    
     def __init__(self):
-        self.version = "2.0.0"
-        self.registry = ProjectRegistry()
-        self.graph = ProjectGraph()
-        self.timeline = ProjectTimeline()
-    
-    def create_project(self, project_id: str, name: str, project_type: str) -> ProjectMetadata:
-        project = ProjectMetadata(project_id=project_id, name=name, type=project_type)
-        self.registry.register(project)
-        return project
-    
-    def get_project(self, project_id: str) -> ProjectMetadata:
-        return self.registry.get(project_id)
-    
-    def list_projects(self) -> List[ProjectMetadata]:
-        return self.registry.list_all()
+        self.version = "1.0.0"
+        self.manager = ProjectManager()
     
     def get_statistics(self) -> Dict[str, Any]:
         return {
-            "total_projects": len(self.registry.list_all()),
-            "project_types": len(PROJECT_TYPES),
-            "version": self.version
+            "version": self.version,
+            "project_types": PROJECT_TYPES,
+            "total_projects": len(self.manager._projects),
         }

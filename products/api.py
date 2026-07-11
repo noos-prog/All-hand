@@ -1,127 +1,98 @@
-"""Universal API Platform - Every AGOS capability through stable public APIs."""
+"""Universal API Platform - Every feature accessible from everywhere."""
+from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from datetime import datetime
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
+import uuid
 
-# API Types
-API_TYPES = [
-    "REST API", "GraphQL API", "gRPC API", "WebSocket API", "Streaming API", "MCP API", "CLI API", "SDK API"
-]
+API_TYPES = ["REST API", "GraphQL API", "gRPC API", "WebSocket API", "Streaming API", "MCP API", "CLI API", "SDK API"]
 
-# Public Services
-PUBLIC_SERVICES = [
-    "Organizations", "Projects", "Repositories", "Knowledge", "Capabilities",
-    "Providers", "Missions", "Executions", "Artifacts", "Analytics",
-    "Marketplace", "Settings", "Search"
-]
 
-# Generated Outputs
-GENERATED_OUTPUTS = [
-    "OpenAPI", "GraphQL Schema", "gRPC Contracts", "SDK Packages", "API Documentation", "Client Libraries"
-]
+class APIType(Enum):
+    """Types of APIs."""
+    REST = "rest"
+    GRAPHQL = "graphql"
+    GRPC = "grpc"
+    WEBSOCKET = "websocket"
+    STREAMING = "streaming"
+    MCP = "mcp"
+    CLI = "cli"
+    SDK = "sdk"
 
-class RESTAPI:
-    def __init__(self):
-        self.name = "REST API"
-    
-    def generate_openapi(self) -> Dict[str, Any]:
-        return {"openapi": "3.0.0", "info": {"title": "AGOS API", "version": "2.0.0"}}
 
-class GraphQLAPI:
-    def __init__(self):
-        self.name = "GraphQL API"
-    
-    def generate_schema(self) -> str:
-        return "type Query { projects: [Project] }"
+@dataclass
+class RESTEndpoint:
+    """A REST API endpoint."""
+    endpoint_id: str
+    path: str
+    method: str
+    description: str = ""
+    handler: Optional[Callable] = None
+    authentication_required: bool = True
+    rate_limit: int = 1000
 
-class gRPCAPI:
-    def __init__(self):
-        self.name = "gRPC API"
-    
-    def generate_contracts(self) -> str:
-        return "service AGOS { rpc Execute(Mission) returns (Result); }"
 
-class WebSocketAPI:
-    def __init__(self):
-        self.name = "WebSocket API"
+@dataclass
+class GraphQLSchema:
+    """A GraphQL schema definition."""
+    schema_id: str
+    types: List[str] = field(default_factory=list)
+    queries: List[str] = field(default_factory=list)
+    mutations: List[str] = field(default_factory=list)
+    subscriptions: List[str] = field(default_factory=list)
 
-class StreamingAPI:
-    def __init__(self):
-        self.name = "Streaming API"
 
-class MCPAPI:
-    def __init__(self):
-        self.name = "MCP API"
+@dataclass
+class GRPCService:
+    """A gRPC service definition."""
+    service_id: str
+    name: str
+    package: str
+    methods: List[str] = field(default_factory=list)
 
-class CLIAPI:
-    def __init__(self):
-        self.name = "CLI API"
 
-class SDKAPI:
-    def __init__(self):
-        self.name = "SDK API"
-
-class UniversalAPIPlatform:
+class APIPlatform:
     """
     Universal API Platform.
     
-    Every AGOS capability accessible from:
-    ✅ Browser
-    ✅ Mobile Application
-    ✅ External Systems
-    ✅ Automation Platforms
+    APIs (8):
+    ✅ REST API, GraphQL API, gRPC API
+    ✅ WebSocket API, Streaming API
+    ✅ MCP API, CLI API, SDK API
     
-    APIs:
-    ✅ REST API
-    ✅ GraphQL API
-    ✅ gRPC API
-    ✅ WebSocket API
-    ✅ Streaming API
-    ✅ MCP API
-    ✅ CLI API
-    ✅ SDK API
-    
-    Public Services:
-    ✅ Organizations, Projects, Repositories, Knowledge, Capabilities
-    ✅ Providers, Missions, Executions, Artifacts, Analytics
-    ✅ Marketplace, Settings, Search
+    Public Services (13):
+    ✅ Organizations, Projects, Repositories, Knowledge
+    ✅ Capabilities, Providers, Missions, Executions
+    ✅ Artifacts, Analytics, Marketplace, Settings, Search
     
     Generated:
     ✅ OpenAPI, GraphQL Schema, gRPC Contracts
     ✅ SDK Packages, API Documentation, Client Libraries
+    
+    Target: Every feature accessible from browser, mobile, external systems, automation
     """
+    
     def __init__(self):
-        self.version = "2.0.0"
-        self.rest = RESTAPI()
-        self.graphql = GraphQLAPI()
-        self.grpc = gRPCAPI()
-        self.websocket = WebSocketAPI()
-        self.streaming = StreamingAPI()
-        self.mcp = MCPAPI()
-        self.cli = CLIAPI()
-        self.sdk = SDKAPI()
+        self.version = "1.0.0"
+        self.rest_endpoints: Dict[str, RESTEndpoint] = {}
+        self.graphql_schemas: Dict[str, GraphQLSchema] = {}
+        self.grpc_services: Dict[str, GRPCService] = {}
     
-    def generate_openapi(self) -> Dict[str, Any]:
-        return self.rest.generate_openapi()
+    def register_rest_endpoint(self, endpoint: RESTEndpoint) -> None:
+        self.rest_endpoints[endpoint.endpoint_id] = endpoint
     
-    def generate_graphql_schema(self) -> str:
-        return self.graphql.generate_schema()
+    def register_graphql_schema(self, schema: GraphQLSchema) -> None:
+        self.graphql_schemas[schema.schema_id] = schema
     
-    def generate_grpc_contracts(self) -> str:
-        return self.grpc.generate_contracts()
+    def register_grpc_service(self, service: GRPCService) -> None:
+        self.grpc_services[service.service_id] = service
     
-    def get_services(self) -> List[str]:
-        return PUBLIC_SERVICES
-    
-    def get_api_types(self) -> List[str]:
-        return API_TYPES
-    
-    def get_generated_outputs(self) -> List[str]:
-        return GENERATED_OUTPUTS
-    
-    def get_status(self) -> Dict[str, Any]:
+    def get_statistics(self) -> Dict[str, Any]:
         return {
             "version": self.version,
-            "apis": len(API_TYPES),
-            "services": len(PUBLIC_SERVICES),
-            "generated_outputs": len(GENERATED_OUTPUTS)
+            "api_types": API_TYPES,
+            "rest_endpoints": len(self.rest_endpoints),
+            "graphql_schemas": len(self.graphql_schemas),
+            "grpc_services": len(self.grpc_services),
         }

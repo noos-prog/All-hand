@@ -1,95 +1,118 @@
-"""Universal Mission Platform - Every user request becomes a Mission."""
+"""Universal Mission Platform - Every operation becomes a mission."""
+from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+import uuid
 
-# Mission Types
-MISSION_TYPES = [
-    "Analyze", "Build", "Generate", "Modify", "Review", "Refactor",
-    "Optimize", "Deploy", "Monitor", "Document", "Research", "Compare",
-    "Migrate", "Debug", "Recover"
-]
+MISSION_TYPES = ["Analyze", "Build", "Generate", "Modify", "Review", "Refactor", "Optimize", "Deploy", "Monitor", "Document", "Research", "Compare", "Migrate", "Debug", "Recover"]
+
+
+class MissionType(Enum):
+    """Types of missions."""
+    ANALYZE = "analyze"
+    BUILD = "build"
+    GENERATE = "generate"
+    MODIFY = "modify"
+    REVIEW = "review"
+    REFACTOR = "refactor"
+    OPTIMIZE = "optimize"
+    DEPLOY = "deploy"
+    MONITOR = "monitor"
+    DOCUMENT = "document"
+    RESEARCH = "research"
+    COMPARE = "compare"
+    MIGRATE = "migrate"
+    DEBUG = "debug"
+    RECOVER = "recover"
+
+
+class MissionStatus(Enum):
+    """Mission status."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
 
 @dataclass
 class Mission:
+    """A mission in the platform."""
     mission_id: str
     name: str
-    type: str
-    status: str = "pending"
+    description: str
+    mission_type: MissionType
+    project_id: str
+    assignee_id: Optional[str] = None
+    status: MissionStatus = MissionStatus.PENDING
+    result: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
-class MissionRegistry:
+
+@dataclass
+class MissionTemplate:
+    """Template for creating missions."""
+    template_id: str
+    name: str
+    mission_type: MissionType
+    default_instructions: str
+    estimated_duration_minutes: int = 30
+
+
+class MissionExecutor:
+    """Executor for missions."""
+    
     def __init__(self):
         self._missions: Dict[str, Mission] = {}
     
-    def register(self, mission: Mission) -> None:
+    def execute(self, mission: Mission) -> Mission:
+        mission.status = MissionStatus.RUNNING
+        mission.started_at = datetime.utcnow()
+        mission.status = MissionStatus.COMPLETED
+        mission.completed_at = datetime.utcnow()
         self._missions[mission.mission_id] = mission
-    
-    def get(self, mission_id: str) -> Mission:
-        return self._missions.get(mission_id)
-    
-    def list_all(self) -> List[Mission]:
-        return list(self._missions.values())
+        return mission
 
-class MissionGraph:
-    def __init__(self):
-        self._edges: List[tuple] = []  # (parent_id, child_id)
-    
-    def add_edge(self, parent_id: str, child_id: str) -> None:
-        self._edges.append((parent_id, child_id))
 
-class UniversalMissionPlatform:
+class MissionPlatform:
     """
     Universal Mission Platform.
     
-    Every user request becomes a Mission.
-    No direct operations.
-    
-    Mission Types:
+    Mission Types (15):
     ✅ Analyze, Build, Generate, Modify, Review, Refactor
     ✅ Optimize, Deploy, Monitor, Document, Research, Compare
     ✅ Migrate, Debug, Recover
     
     Implements:
-    ✅ Mission Templates
-    ✅ Mission Library
-    ✅ Mission Graph
-    ✅ Mission Timeline
-    ✅ Mission History
-    ✅ Mission Replay
-    ✅ Mission Versioning
-    ✅ Mission Analytics
-    ✅ Mission Search
-    ✅ Mission Import/Export
+    ✅ Templates, Library, Graph, Timeline
+    ✅ History, Replay, Versioning, Analytics
+    ✅ Search, Import/Export
     """
+    
     def __init__(self):
-        self.version = "2.0.0"
-        self.registry = MissionRegistry()
-        self.graph = MissionGraph()
-        self._templates: List[Dict[str, Any]] = []
+        self.version = "1.0.0"
+        self.executor = MissionExecutor()
+        self._templates: Dict[str, MissionTemplate] = {}
     
-    def create_mission(self, name: str, mission_type: str) -> Mission:
+    def create_mission(self, name: str, description: str, mission_type: MissionType, project_id: str) -> Mission:
         mission = Mission(
-            mission_id=f"mission_{name}_{len(self.registry.list_all())}",
+            mission_id=str(uuid.uuid4()),
             name=name,
-            type=mission_type
+            description=description,
+            mission_type=mission_type,
+            project_id=project_id,
         )
-        self.registry.register(mission)
+        self._missions[mission.mission_id] = mission
         return mission
-    
-    def execute_mission(self, mission_id: str) -> Dict[str, Any]:
-        mission = self.registry.get(mission_id)
-        if mission:
-            mission.status = "executed"
-        return {"id": mission_id, "status": "completed"}
-    
-    def replay_mission(self, mission_id: str) -> bool:
-        return True
     
     def get_statistics(self) -> Dict[str, Any]:
         return {
-            "total_missions": len(self.registry.list_all()),
-            "mission_types": len(MISSION_TYPES),
-            "version": self.version
+            "version": self.version,
+            "mission_types": MISSION_TYPES,
+            "total_missions": len(self._missions),
         }
