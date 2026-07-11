@@ -63,16 +63,16 @@ export interface TaskResult {
 }
 
 export interface Task {
-  id: string;
+  task_id?: string;
+  id?: string;
   specialization: string;
   prompt: string;
   status: TaskStatus;
-  created_at: number;
-  finished_at?: number;
+  created_at: string;
+  finished_at?: string;
   result?: TaskResult | null;
   agent?: string;
   agent_name?: string;
-  task_id?: string;
   elapsed_s?: number;
 }
 
@@ -80,7 +80,7 @@ export interface EventLog {
   id?: number;
   event_type: string;
   event_data: Record<string, unknown>;
-  created_at: string | number;
+  created_at: string;
 }
 
 export interface ChatResponse {

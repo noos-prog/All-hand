@@ -5,7 +5,7 @@ export function Spinner({ size = 20, className = '' }: { size?: number; classNam
   return (
     <Loader2
       size={size}
-      className={`animate-spin text-accent ${className}`}
+      className={`animate-spin text-[#00d4ff] ${className}`}
       aria-label="loading"
     />
   );
@@ -13,7 +13,7 @@ export function Spinner({ size = 20, className = '' }: { size?: number; classNam
 
 export function LoadingState({ label = 'جاري التحميل...' }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-3 py-16 text-primary-secondary animate-fade-in">
+    <div className="flex items-center justify-center gap-3 py-16 text-[#9ba8c4] animate-fade-in">
       <Spinner />
       <span>{label}</span>
     </div>
@@ -31,11 +31,11 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
-      <div className="w-16 h-16 rounded-2xl bg-elevated/50 border border-border flex items-center justify-center mb-4">
-        <Icon size={28} className="text-primary-muted" />
+      <div className="w-16 h-16 rounded-2xl bg-[#1a2236]/50 border border-[#2a3550] flex items-center justify-center mb-4">
+        <Icon size={28} className="text-[#5c6b8a]" />
       </div>
-      <div className="text-lg font-semibold text-primary-secondary">{label}</div>
-      {sublabel && <div className="text-sm text-primary-muted mt-1">{sublabel}</div>}
+      <div className="text-lg font-semibold text-[#9ba8c4]">{label}</div>
+      {sublabel && <div className="text-sm text-[#5c6b8a] mt-1">{sublabel}</div>}
     </div>
   );
 }

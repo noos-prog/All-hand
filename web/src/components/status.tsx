@@ -2,18 +2,18 @@ import type { TaskStatus, AgentStatus } from '../types';
 
 export function StatusDot({ status }: { status: TaskStatus | AgentStatus }) {
   const colors: Record<string, string> = {
-    completed: 'bg-success',
-    idle: 'bg-success',
-    failed: 'bg-error',
-    running: 'bg-accent',
-    working: 'bg-accent',
-    queued: 'bg-warning',
-    stopped: 'bg-primary-muted',
+    completed: 'bg-[#00e676]',
+    idle: 'bg-[#00e676]',
+    failed: 'bg-[#ff5252]',
+    running: 'bg-[#00d4ff]',
+    working: 'bg-[#00d4ff]',
+    queued: 'bg-[#ffab40]',
+    stopped: 'bg-[#5c6b8a]',
   };
   const pulsing = status === 'running' || status === 'working' || status === 'queued';
   return (
     <span
-      className={`inline-block w-2 h-2 rounded-full ${colors[status] || 'bg-primary-muted'} ${
+      className={`inline-block w-2 h-2 rounded-full ${colors[status] || 'bg-[#5c6b8a]'} ${
         pulsing ? 'dot-pulse' : ''
       }`}
     />
@@ -55,14 +55,14 @@ export function LlmStatusBadge({ configured, model }: { configured: boolean; mod
   if (configured) {
     return (
       <span className="badge-success">
-        <span className="w-2 h-2 rounded-full bg-success dot-pulse" />
+        <span className="w-2 h-2 rounded-full bg-[#00e676] dot-pulse" />
         {model}
       </span>
     );
   }
   return (
     <span className="badge-warning">
-      <span className="w-2 h-2 rounded-full bg-warning" />
+      <span className="w-2 h-2 rounded-full bg-[#ffab40]" />
       يحتاج مفتاح API
     </span>
   );
@@ -75,7 +75,7 @@ export function formatUptime(seconds: number): string {
   return `${h}س ${m}د ${s}ث`;
 }
 
-export function formatTimestamp(ts: number | string): string {
+export function formatTimestamp(ts: string | number): string {
   const date = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts);
   return date.toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
 }

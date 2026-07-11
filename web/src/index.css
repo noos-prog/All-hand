@@ -47,11 +47,11 @@ body {
 
 @layer components {
   .glass-card {
-    @apply bg-card/80 backdrop-blur-xl border border-border rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.4)];
+    @apply bg-[#111827]/80 backdrop-blur-xl border border-[#2a3550] rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.4)];
   }
 
   .glass-card-hover {
-    @apply glass-card transition-all duration-300 hover:border-border-light hover:shadow-[0_0_24px_rgba(0,212,255,0.08)] hover:-translate-y-0.5;
+    @apply glass-card transition-all duration-300 hover:border-[#364260] hover:shadow-[0_0_24px_rgba(0,212,255,0.08)] hover:-translate-y-0.5;
   }
 
   .btn {
@@ -59,15 +59,15 @@ body {
   }
 
   .btn-primary {
-    @apply btn text-white bg-gradient-to-br from-accent to-blue-600 hover:shadow-[0_0_20px_rgba(0,212,255,0.3)] hover:scale-[1.02] active:scale-95;
+    @apply btn text-white bg-gradient-to-br from-[#00d4ff] to-blue-600 hover:shadow-[0_0_20px_rgba(0,212,255,0.3)] hover:scale-[1.02] active:scale-95;
   }
 
   .btn-ghost {
-    @apply btn text-primary-secondary bg-elevated/50 hover:bg-hover border border-border hover:border-border-light;
+    @apply btn text-[#9ba8c4] bg-[#1a2236]/50 hover:bg-[#232d44] border border-[#2a3550] hover:border-[#364260];
   }
 
   .btn-danger {
-    @apply btn text-error bg-error/10 hover:bg-error/20 border border-error/30;
+    @apply btn text-[#ff5252] bg-[#ff5252]/10 hover:bg-[#ff5252]/20 border border-[#ff5252]/30;
   }
 
   .badge {
@@ -75,40 +75,34 @@ body {
   }
 
   .badge-success {
-    @apply badge bg-success/15 text-success border border-success/20;
+    @apply badge bg-[#00e676]/15 text-[#00e676] border border-[#00e676]/20;
   }
 
   .badge-error {
-    @apply badge bg-error/15 text-error border border-error/20;
+    @apply badge bg-[#ff5252]/15 text-[#ff5252] border border-[#ff5252]/20;
   }
 
   .badge-warning {
-    @apply badge bg-warning/15 text-warning border border-warning/20;
+    @apply badge bg-[#ffab40]/15 text-[#ffab40] border border-[#ffab40]/20;
   }
 
   .badge-info {
-    @apply badge bg-accent/15 text-accent border border-accent/20;
+    @apply badge bg-[#00d4ff]/15 text-[#00d4ff] border border-[#00d4ff]/20;
   }
 
   .form-input {
-    @apply w-full bg-elevated/60 border border-border rounded-xl px-4 py-3 text-primary placeholder-primary-muted/60
-           focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all duration-200
+    @apply w-full bg-[#1a2236]/60 border border-[#2a3550] rounded-xl px-4 py-3 text-[#e8ecf4] placeholder-[#5c6b8a]/60
+           focus:outline-none focus:border-[#00d4ff] focus:ring-1 focus:ring-[#00d4ff]/30 transition-all duration-200
            resize-none;
   }
 
   .nav-tab {
     @apply px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center gap-2
-           text-primary-secondary hover:text-primary hover:bg-elevated/50;
+           text-[#9ba8c4] hover:text-[#e8ecf4] hover:bg-[#1a2236]/50;
   }
 
   .nav-tab-active {
-    @apply text-white bg-gradient-to-br from-accent/20 to-blue-600/20 border border-accent/30 shadow-[0_0_12px_rgba(0,212,255,0.1)];
-  }
-
-  .shimmer-bg {
-    background: linear-gradient(90deg, #111827 0%, #1a2236 50%, #111827 100%);
-    background-size: 200% 100%;
-    animation: shimmer 2s linear infinite;
+    @apply text-white bg-gradient-to-br from-[#00d4ff]/20 to-blue-600/20 border border-[#00d4ff]/30 shadow-[0_0_12px_rgba(0,212,255,0.1)];
   }
 }
 
