@@ -1,0 +1,40 @@
+// Mission.agl — the canonical example from 01-AGL-Language/README.md,
+// used as a real fixture for the AGL parser/compiler tests.
+
+object Mission {
+    id: UUID
+    name: String
+    type: Enum [BUILD, FIX, REFACTOR]
+    tasks: Task[]
+    parent: Goal?
+
+    validate {
+        name: required, min(3), max(100)
+    }
+
+    events {
+        created: MissionCreated {
+            mission_id: UUID
+            name: String
+            created_by: UUID
+            timestamp: DateTime
+        }
+        state_changed: MissionStateChanged {
+            mission_id: UUID
+            from_state: String
+            to_state: String
+            changed_by: UUID
+            timestamp: DateTime
+        }
+    }
+
+    permissions {
+        read: [owner, admin, viewer]
+        write: {
+            status: [admin]
+            name: [owner, admin]
+        }
+    }
+
+    version "1.0.0"
+}
