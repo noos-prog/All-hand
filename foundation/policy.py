@@ -1,8 +1,27 @@
 """AGOS Universal Policy Runtime - EXECUTION-000016."""
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from datetime import datetime
+from enum import Enum
+
 
 POLICY_TYPES = ["Security", "Architecture", "Execution", "Knowledge", "Lifecycle", "Governance", "Quality", "Performance", "Cost", "Compliance", "Risk"]
+
+
+class PolicyType(Enum):
+    """Types of policies."""
+    SECURITY = "security"
+    ARCHITECTURE = "architecture"
+    EXECUTION = "execution"
+    KNOWLEDGE = "knowledge"
+    LIFECYCLE = "lifecycle"
+    GOVERNANCE = "governance"
+    QUALITY = "quality"
+    PERFORMANCE = "performance"
+    COST = "cost"
+    COMPLIANCE = "compliance"
+    RISK = "risk"
+
 
 @dataclass
 class Policy:
@@ -13,6 +32,44 @@ class Policy:
     rules: List[Dict[str, Any]] = field(default_factory=list)
     version: str = "1.0.0"
     enabled: bool = True
+
+
+class PolicyManager:
+    """Manager for policy operations."""
+    
+    def __init__(self):
+        self.registry = PolicyRegistry()
+        self.evaluator = PolicyEvaluator()
+    
+    def create_policy(
+        self,
+        policy_type: str,
+        name: str,
+        description: str,
+        rules: Optional[List[Dict[str, Any]]] = None,
+    ) -> Policy:
+        """Create a new policy."""
+        policy = Policy(
+            policy_id=f"policy_{name}",
+            policy_type=policy_type,
+            name=name,
+            description=description,
+            rules=rules or [],
+        )
+        self.registry.register(policy)
+        return policy
+    
+    def get_policy(self, policy_id: str) -> Optional[Policy]:
+        """Get a policy by ID."""
+        return self.registry.get(policy_id)
+    
+    def evaluate_policy(self, policy_id: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Evaluate a policy against context."""
+        policy = self.registry.get(policy_id)
+        if policy:
+            return self.evaluator.evaluate(policy, context)
+        return {"error": "Policy not found"}
+
 
 class PolicyRegistry:
     def __init__(self):

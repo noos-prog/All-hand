@@ -1,8 +1,36 @@
 """AGOS Universal Dependency Intelligence - EXECUTION-000014."""
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from datetime import datetime
+from enum import Enum
+
 
 TRACK_DEPENDENCIES = ["Code Dependencies", "Capability Dependencies", "Provider Dependencies", "Workflow Dependencies", "Mission Dependencies", "Knowledge Dependencies", "Policy Dependencies", "Contract Dependencies", "Schema Dependencies", "Organization Dependencies"]
+
+
+class DependencyType(Enum):
+    """Types of dependencies."""
+    CODE = "code"
+    CAPABILITY = "capability"
+    PROVIDER = "provider"
+    WORKFLOW = "workflow"
+    MISSION = "mission"
+    KNOWLEDGE = "knowledge"
+    POLICY = "policy"
+
+
+@dataclass
+class Dependency:
+    """A dependency relationship."""
+    dependency_id: str
+    source_id: str
+    target_id: str
+    dependency_type: DependencyType
+    is_optional: bool = False
+    is_transitive: bool = False
+    version_constraint: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
 
 class DependencyGraph:
     def __init__(self):

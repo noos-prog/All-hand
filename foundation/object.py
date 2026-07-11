@@ -1,11 +1,28 @@
 """AGOS Universal Object System - EXECUTION-000011."""
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from enum import Enum
 import json
 
 OBJECT_TYPES = ["Mission", "Capability", "Provider", "Skill", "Workflow", "Knowledge", "Project", "Repository", "Execution", "Artifact", "Event", "Policy", "Organization", "Agent", "Model", "Tool", "Template", "User", "Session"]
 
 BASE_OBJECT_FIELDS = ["Identity", "Metadata", "Lifecycle", "Schema", "Contracts", "Policies", "Relationships", "Events", "Permissions", "Telemetry", "Version", "Labels", "Tags", "Attributes", "Evidence"]
+
+
+class ObjectType(Enum):
+    """Types of universal objects."""
+    MISSION = "mission"
+    CAPABILITY = "capability"
+    PROVIDER = "provider"
+    SKILL = "skill"
+    WORKFLOW = "workflow"
+    KNOWLEDGE = "knowledge"
+    PROJECT = "project"
+    REPOSITORY = "repository"
+    EXECUTION = "execution"
+    ARTIFACT = "artifact"
+
 
 @dataclass
 class BaseObject:
@@ -31,7 +48,7 @@ class BaseObject:
         """Implement Serializable."""
         return json.dumps(self.__dict__, indent=2)
     
-    def validate(self) -> tuple[bool, List[str]]:
+    def validate(self) -> Tuple[bool, List[str]]:
         """Implement Validatable."""
         errors = []
         if not self.identity:
@@ -41,6 +58,37 @@ class BaseObject:
         if not self.owner:
             errors.append("Owner is required")
         return len(errors) == 0, errors
+
+
+class ObjectManager:
+    """Manager for universal objects."""
+    
+    def __init__(self):
+        self.registry = ObjectRegistry()
+    
+    def create_object(
+        self,
+        identity: str,
+        version: str,
+        owner: str,
+        lifecycle: str,
+    ) -> BaseObject:
+        """Create a new base object."""
+        obj = BaseObject(identity=identity, version=version, owner=owner, lifecycle=lifecycle)
+        self.registry.register(obj)
+        return obj
+    
+    def get_object(self, identity: str) -> Optional[BaseObject]:
+        """Get an object by identity."""
+        return self.registry.get(identity)
+    
+    def search_objects(self, **filters) -> List[BaseObject]:
+        """Search for objects."""
+        return self.registry.search(**filters)
+
+
+UniversalObject = BaseObject
+
 
 class ObjectRegistry:
     """Registry for all AGOS objects."""

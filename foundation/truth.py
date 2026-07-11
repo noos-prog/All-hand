@@ -1,16 +1,45 @@
 """AGOS Universal Truth Engine - EXECUTION-000020."""
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from datetime import datetime
+from enum import Enum
+
+
+class TruthLevel(Enum):
+    """Levels of truth/confidence."""
+    VERIFIED = "verified"
+    PROBABLE = "probable"
+    POSSIBLE = "possible"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class Truth:
+    """Truth representation for knowledge objects."""
+    truth_id: str
+    level: TruthLevel
+    confidence: float
+    evidence_count: int = 0
+    sources: List[str] = field(default_factory=list)
+    verified_at: Optional[datetime] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def is_verified(self) -> bool:
+        """Check if truth is verified."""
+        return self.level == TruthLevel.VERIFIED and self.confidence >= 0.7
+
 
 class ConflictResolver:
     """Resolves conflicts between evidence."""
     def resolve(self, evidence_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         return {"resolved": True, "conclusion": "consensus"}
 
+
 class ConsensusEngine:
     """Determines consensus from multiple sources."""
     def achieve_consensus(self, sources: List[Dict[str, Any]]) -> Dict[str, Any]:
         return {"consensus": True, "agreed": True}
+
 
 class TrustScorer:
     """Computes trust scores for knowledge objects."""
@@ -18,6 +47,49 @@ class TrustScorer:
         if not evidence_list:
             return 0.0
         return sum(e.get("confidence", 0) for e in evidence_list) / len(evidence_list)
+
+
+class TruthEngine:
+    """Engine for computing truth from evidence."""
+    
+    def __init__(self):
+        self._truths: Dict[str, Truth] = {}
+    
+    def compute_truth(
+        self,
+        evidence_list: List[Dict[str, Any]],
+    ) -> Truth:
+        """Compute truth from evidence."""
+        if not evidence_list:
+            return Truth(
+                truth_id="unknown",
+                level=TruthLevel.UNKNOWN,
+                confidence=0.0,
+            )
+        
+        avg_confidence = sum(e.get("confidence", 0) for e in evidence_list) / len(evidence_list)
+        
+        if avg_confidence >= 0.9:
+            level = TruthLevel.VERIFIED
+        elif avg_confidence >= 0.7:
+            level = TruthLevel.PROBABLE
+        elif avg_confidence >= 0.3:
+            level = TruthLevel.POSSIBLE
+        else:
+            level = TruthLevel.UNKNOWN
+        
+        truth = Truth(
+            truth_id=f"truth_{len(self._truths)}",
+            level=level,
+            confidence=avg_confidence,
+            evidence_count=len(evidence_list),
+            sources=[e.get("source", "unknown") for e in evidence_list],
+            verified_at=datetime.utcnow() if level == TruthLevel.VERIFIED else None,
+        )
+        
+        self._truths[truth.truth_id] = truth
+        return truth
+
 
 class UniversalTruthEngine:
     """
@@ -43,6 +115,7 @@ class UniversalTruthEngine:
     """
     def __init__(self):
         self.version = "1.0.0"
+        self.truth_engine = TruthEngine()
         self.conflict_resolver = ConflictResolver()
         self.consensus_engine = ConsensusEngine()
         self.trust_scorer = TrustScorer()

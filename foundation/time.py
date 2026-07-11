@@ -1,9 +1,42 @@
 """AGOS Universal Time Platform - EXECUTION-000018."""
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from datetime import datetime
+from enum import Enum
 
 TIME_TYPES = ["Logical Time", "Physical Time", "Mission Time", "Execution Time", "Version Time", "Knowledge Time", "Event Time", "Lifecycle Time"]
+
+
+class TimeZone(Enum):
+    """Supported time zones."""
+    UTC = "UTC"
+    LOCAL = "LOCAL"
+    MISSION = "MISSION"
+    EXECUTION = "EXECUTION"
+
+
+@dataclass
+class TemporalContext:
+    """Context for temporal operations."""
+    context_id: str
+    logical_time: int
+    physical_time: datetime
+    timezone: TimeZone = TimeZone.UTC
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def advance(self, steps: int = 1) -> None:
+        """Advance logical time."""
+        self.logical_time += steps
+    
+    def snapshot(self) -> Dict[str, Any]:
+        """Create a snapshot of the context."""
+        return {
+            "context_id": self.context_id,
+            "logical_time": self.logical_time,
+            "physical_time": self.physical_time.isoformat(),
+            "timezone": self.timezone.value,
+            "metadata": self.metadata,
+        }
 
 class TimeManager:
     """Manages different time concepts."""
